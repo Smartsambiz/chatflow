@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import api from '../../services/api'
+import { io } from 'socket.io-client'
 
 function Inbox() {
   const [conversations, setConversations] = useState([])
@@ -27,6 +28,43 @@ function Inbox() {
   useEffect(() => {
     if (selectedCustomer) {
       fetchMessages(selectedCustomer._id)
+    }
+  }, [selectedCustomer])
+
+  useEffect(()=>{
+    const user = JSON.parse(localStorage.getItem('user') || '{}')
+    const socket = io('http://localhost:5000')
+
+    socket.on('connect', () => {
+      console.log('Socket connected:', socket.id)
+      console.log('Socket joining room with business id:', user._id)
+      if (user?._id) {
+        socket.emit('joinBusinessRoom', user._id)
+      } else {
+        console.warn('No business ID found in localStorage user')
+      }
+    })
+
+    socket.on('new_message', (data)=>{
+      console.log('Socket new_message received:', data)
+      fetchConversations()
+
+      const currentCustomerId = selectedCustomer?._id ? String(selectedCustomer._id) : null
+      const incomingCustomerId = data?.customerId ? String(data.customerId) : null
+
+      console.log('Socket compare debug:', {
+        selectedCustomer,
+        currentCustomerId,
+        incomingCustomerId,
+      })
+
+      if (currentCustomerId && incomingCustomerId && currentCustomerId === incomingCustomerId) {
+        fetchMessages(data.customerId)
+      }
+    })
+
+    return ()=>{
+      socket.disconnect()
     }
   }, [selectedCustomer])
 
@@ -72,18 +110,45 @@ function Inbox() {
     if (!replyText.trim() || !selectedCustomer) return
     setSending(true)
 
+    const messageToSend = replyText.trim()
+    const tempId = `temp-${Date.now()}`
+    const optimisticMessage = {
+      _id: tempId,
+      businessId: selectedCustomer._id,
+      customerId: selectedCustomer._id,
+      direction: 'outbound',
+      type: 'text',
+      content: messageToSend,
+      status: 'sent',
+      timestamp: new Date().toISOString(),
+    }
+
+    console.log('Sending message:', messageToSend, 'to', selectedCustomer._id)
+    setMessages((prevMessages) => [...prevMessages, optimisticMessage])
+    setReplyText('')
+
     try {
-      await api.post('/conversations/send', {
+      const response = await api.post('/conversations/send', {
         customerId: selectedCustomer._id,
-        message: replyText,
+        message: messageToSend,
       })
-      setReplyText('')
-      // Refresh messages after sending
-      fetchMessages(selectedCustomer._id)
+      console.log('Send response:', response.data)
+
+      if (response.data?.data) {
+        setMessages((prevMessages) =>
+          prevMessages.map((msg) =>
+            msg._id === tempId ? response.data.data : msg
+          )
+        )
+      }
+
+      await fetchMessages(selectedCustomer._id)
+      await fetchConversations()
     } catch (err) {
       console.error('Failed to send message:', err)
 
-      // Handle specific error types
+      setMessages((prevMessages) => prevMessages.filter((msg) => msg._id !== tempId))
+
       if (err.response?.data?.error === 'TOKEN_EXPIRED') {
         alert('Your WhatsApp access token has expired. Please go to Settings to update your access token.')
       } else {

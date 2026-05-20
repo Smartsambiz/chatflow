@@ -100,8 +100,47 @@ const receiveMessage = async (req, res)=>{
 
         console.log('Message saved to database for customer:', customer.phone);
 
+        // Auto-reply with AI suggestion
+        if(aiSuggestion){
+            try{
+                await sendTextMessage(
+                    business.whatsappPhoneNumberId,
+                    business.whatsappAccessToken,
+                    customerPhone,
+                    aiSuggestion
+                );
+
+                await Message.create({
+                    businessId: business._id,
+                    customerId: customer._id,
+                    direction: 'outbound',
+                    type: 'text',
+                    content: aiSuggestion,
+                    status: 'sent',
+                    timestamp: new Date(),
+                })
+                console.log('Auto-reply sent to customer:', customer.phone);
+            } catch (autoReplyError){
+                console.error('Error sending auto-reply:', autoReplyError);
+            }
+        }
+
         //Always respond with 200 to Meta,
         // if you don't, Meta will keep retrying.
+        const io = req.app.get('io');
+        if(io){
+            console.log('Emitting new_message to room:', business._id.toString(), {
+              customerId: customer._id,
+              customerName: customer.name,
+              message: messageText,
+            })
+            io.to(business._id.toString()).emit('new_message', {
+                customerId: customer._id,
+                customerName: customer.name,
+                message: messageText,
+                timestamp: new Date(),
+            });
+        }
         res.sendStatus(200);
     } catch (error) {
         console.error('Error receiving message:', error);
