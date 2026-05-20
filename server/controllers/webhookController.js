@@ -94,7 +94,7 @@ const receiveMessage = async (req, res)=>{
             direction: 'inbound',
             type: 'text',
             content: messageText,
-            aiSuggestions: aiSuggestion || '',
+            aiSuggestion: aiSuggestion || '',
             timestamp: new Date(),
         });
 

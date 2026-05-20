@@ -41,7 +41,7 @@ const messageSchema = new mongoose.Schema({
         enum: ['sent', 'delivered', 'read', 'failed'],
         default: 'sent',
     },
-    aiSuggestions: {
+    aiSuggestion: {
         type: String,
         default: ''
     },

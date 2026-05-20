@@ -5,14 +5,15 @@ const dotenv = require("dotenv");
 const http = require("http");
 const {Server}= require("socket.io");
 const connectDB = require("./config/db");
-const authRoutes = require("./routes/authRoute");
-const webhookRoutes = require("./routes/webhookRoute");
-const conversationRoute = require("./routes/conversationRoute");
 
 dns.setServers(["8.8.8.8", "8.8.4.4"]);
 
 //Load environment variables
 dotenv.config();
+
+const authRoutes = require("./routes/authRoute");
+const webhookRoutes = require("./routes/webhookRoute");
+const conversationRoute = require("./routes/conversationRoute");
 
 //Connect to MongoDB
 connectDB();
