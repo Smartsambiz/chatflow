@@ -1,11 +1,25 @@
 import { useState, useEffect } from 'react'
 import api from '../../services/api'
 
+const emptyForm = {
+  businessName: '',
+  ownerName: '',
+  phone: '',
+  businessCategory: '',
+  description: '',
+  productsServices: '',
+  productImageUrls: '',
+  bankName: '',
+  accountName: '',
+  accountNumber: '',
+  autoReplyEnabled: true,
+  autoReplyDelaySeconds: 30,
+  whatsappPhoneNumberId: '',
+  whatsappAccessToken: '',
+}
+
 function Settings() {
-  const [formData, setFormData] = useState({
-    whatsappPhoneNumberId: '',
-    whatsappAccessToken: ''
-  })
+  const [formData, setFormData] = useState(emptyForm)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
@@ -18,9 +32,23 @@ function Settings() {
     setLoading(true)
     try {
       const response = await api.get('/auth/profile')
+      const user = response.data.user || {}
       setFormData({
-        whatsappPhoneNumberId: response.data.user.whatsappPhoneNumberId || '',
-        whatsappAccessToken: response.data.user.whatsappAccessToken || ''
+        ...emptyForm,
+        businessName: user.businessName || '',
+        ownerName: user.ownerName || '',
+        phone: user.phone || '',
+        businessCategory: user.businessCategory || '',
+        description: user.description || '',
+        productsServices: user.productsServices || '',
+        productImageUrls: (user.productImageUrls || []).join('\n'),
+        bankName: user.bankName || '',
+        accountName: user.accountName || '',
+        accountNumber: user.accountNumber || '',
+        autoReplyEnabled: user.autoReplyEnabled ?? true,
+        autoReplyDelaySeconds: user.autoReplyDelaySeconds || 30,
+        whatsappPhoneNumberId: user.whatsappPhoneNumberId || '',
+        whatsappAccessToken: user.whatsappAccessToken || '',
       })
     } catch (err) {
       console.error('Failed to fetch settings:', err)
@@ -36,7 +64,12 @@ function Settings() {
     setMessage('')
 
     try {
-      await api.put('/auth/profile', formData)
+      const payload = {
+        ...formData,
+        autoReplyDelaySeconds: Number(formData.autoReplyDelaySeconds) || 30,
+      }
+      const response = await api.put('/auth/profile', payload)
+      localStorage.setItem('user', JSON.stringify(response.data.user))
       setMessage('Settings saved successfully!')
     } catch (err) {
       console.error('Failed to save settings:', err)
@@ -47,96 +80,160 @@ function Settings() {
   }
 
   const handleChange = (e) => {
+    const { name, value, type, checked } = e.target
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [name]: type === 'checkbox' ? checked : value,
     })
   }
 
+  const inputClass = 'w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10'
+  const labelClass = 'mb-2 block text-sm font-bold text-slate-700'
+
   return (
-    <div className="p-8 max-w-2xl">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Settings</h1>
-
-      {message && (
-        <div className={`p-4 rounded-lg mb-6 ${
-          message.includes('successfully')
-            ? 'bg-green-50 text-green-700 border border-green-200'
-            : 'bg-red-50 text-red-700 border border-red-200'
-        }`}>
-          {message}
+    <main className="min-h-screen overflow-y-auto p-4 pb-28 sm:p-6 sm:pb-28 lg:p-8">
+      <section className="max-w-6xl">
+        <div className="rounded-[2rem] bg-slate-950 p-6 text-white shadow-2xl shadow-slate-950/15 sm:p-8">
+          <p className="text-sm font-bold uppercase tracking-[0.2em] text-emerald-300">Settings</p>
+          <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">Business brain and WhatsApp setup</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+            Teach ChatFlow about your business so AI suggestions and delayed auto-replies sound useful, accurate, and on-brand.
+          </p>
         </div>
-      )}
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">WhatsApp Configuration</h2>
-        <p className="text-sm text-gray-600 mb-6">
-          Configure your WhatsApp Business API credentials to send and receive messages.
-          Access tokens expire after 24 hours for testing - you'll need to generate a new one when that happens.
-        </p>
-
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <h3 className="text-sm font-medium text-blue-800 mb-2">How to get your credentials:</h3>
-          <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
-            <li>Go to <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer" className="underline">Facebook Developers</a></li>
-            <li>Navigate to your WhatsApp Business API app</li>
-            <li>Go to WhatsApp API Setup</li>
-            <li>Copy your Phone Number ID and generate a new Access Token</li>
-          </ol>
-        </div>
+        {message && (
+          <div className={`mt-6 rounded-2xl border p-4 text-sm font-bold ${
+            message.includes('successfully')
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              : 'border-rose-200 bg-rose-50 text-rose-700'
+          }`}>
+            {message}
+          </div>
+        )}
 
         {loading ? (
-          <div className="text-center py-8">
-            <p className="text-gray-500">Loading settings...</p>
+          <div className="mt-6 rounded-3xl bg-white p-8 text-center text-sm font-medium text-slate-500 shadow-xl shadow-slate-950/5">
+            Loading settings...
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Phone Number ID
-              </label>
-              <input
-                type="text"
-                name="whatsappPhoneNumberId"
-                value={formData.whatsappPhoneNumberId}
-                onChange={handleChange}
-                placeholder="Enter your WhatsApp Phone Number ID"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Found in your WhatsApp Business API dashboard
-              </p>
+          <form onSubmit={handleSubmit} className="mt-6 grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+            <div className="space-y-6">
+              <section className="rounded-3xl border border-emerald-950/10 bg-white p-5 shadow-xl shadow-slate-950/5 sm:p-6">
+                <h2 className="text-lg font-black text-slate-950">Business profile</h2>
+                <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={labelClass}>Business Name</label>
+                    <input name="businessName" value={formData.businessName} onChange={handleChange} className={inputClass} required />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Owner Name</label>
+                    <input name="ownerName" value={formData.ownerName} onChange={handleChange} className={inputClass} required />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Phone</label>
+                    <input name="phone" value={formData.phone} onChange={handleChange} className={inputClass} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Business Category</label>
+                    <input name="businessCategory" value={formData.businessCategory} onChange={handleChange} placeholder="Fashion, food, beauty, logistics..." className={inputClass} />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <label className={labelClass}>Business Description</label>
+                  <textarea name="description" value={formData.description} onChange={handleChange} rows={4} placeholder="What your business does, where you serve, and what customers usually ask." className={`${inputClass} resize-none`} />
+                </div>
+              </section>
+
+              <section className="rounded-3xl border border-emerald-950/10 bg-white p-5 shadow-xl shadow-slate-950/5 sm:p-6">
+                <h2 className="text-lg font-black text-slate-950">Auto-reply behavior</h2>
+                <label className="mt-5 flex items-start gap-3 rounded-2xl bg-emerald-50 p-4">
+                  <input
+                    type="checkbox"
+                    name="autoReplyEnabled"
+                    checked={formData.autoReplyEnabled}
+                    onChange={handleChange}
+                    className="mt-1 h-5 w-5 rounded border-emerald-300 accent-emerald-600"
+                  />
+                  <span>
+                    <span className="block text-sm font-black text-slate-900">Send AI reply automatically</span>
+                    <span className="mt-1 block text-xs leading-5 text-slate-600">
+                      AI suggestions appear immediately. If no manual reply is sent, ChatFlow sends after the delay.
+                    </span>
+                  </span>
+                </label>
+                <div className="mt-4">
+                  <label className={labelClass}>Delay before auto-send</label>
+                  <input
+                    type="number"
+                    name="autoReplyDelaySeconds"
+                    min="5"
+                    max="300"
+                    value={formData.autoReplyDelaySeconds}
+                    onChange={handleChange}
+                    className={inputClass}
+                  />
+                  <p className="mt-2 text-xs font-medium text-slate-500">30 seconds is recommended.</p>
+                </div>
+              </section>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Access Token
-              </label>
-              <textarea
-                name="whatsappAccessToken"
-                value={formData.whatsappAccessToken}
-                onChange={handleChange}
-                placeholder="Enter your WhatsApp Access Token"
-                rows={4}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Your permanent access token from WhatsApp Business API
-              </p>
-            </div>
+            <div className="space-y-6">
+              <section className="rounded-3xl border border-emerald-950/10 bg-white p-5 shadow-xl shadow-slate-950/5 sm:p-6">
+                <h2 className="text-lg font-black text-slate-950">Products, services, and payment</h2>
+                <div className="mt-5">
+                  <label className={labelClass}>Products or Services</label>
+                  <textarea name="productsServices" value={formData.productsServices} onChange={handleChange} rows={6} placeholder="List products, services, prices, sizes, delivery areas, booking rules, return policy, and anything customers ask often." className={`${inputClass} resize-none`} />
+                </div>
+                <div className="mt-4">
+                  <label className={labelClass}>Product Image Links</label>
+                  <textarea name="productImageUrls" value={formData.productImageUrls} onChange={handleChange} rows={4} placeholder="Paste one image URL per line." className={`${inputClass} resize-none`} />
+                  <p className="mt-2 text-xs font-medium text-slate-500">The AI can share these links when customers ask to see products.</p>
+                </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className={labelClass}>Bank Name</label>
+                    <input name="bankName" value={formData.bankName} onChange={handleChange} placeholder="GTBank" className={inputClass} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Account Name</label>
+                    <input name="accountName" value={formData.accountName} onChange={handleChange} placeholder="Adaeze Boutique" className={inputClass} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Account Number</label>
+                    <input name="accountNumber" value={formData.accountNumber} onChange={handleChange} placeholder="0123456789" className={inputClass} />
+                  </div>
+                </div>
+              </section>
 
-            <button
-              type="submit"
-              disabled={saving}
-              className="w-full bg-green-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? 'Saving...' : 'Save Settings'}
-            </button>
+              <section className="rounded-3xl border border-emerald-950/10 bg-white p-5 shadow-xl shadow-slate-950/5 sm:p-6">
+                <h2 className="text-lg font-black text-slate-950">WhatsApp configuration</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Add your WhatsApp API credentials so ChatFlow can send replies and receive customer messages.
+                </p>
+                <div className="mt-5 space-y-4">
+                  <div>
+                    <label className={labelClass}>Phone Number ID</label>
+                    <input name="whatsappPhoneNumberId" value={formData.whatsappPhoneNumberId} onChange={handleChange} placeholder="Enter your WhatsApp Phone Number ID" className={inputClass} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Access Token</label>
+                    <textarea name="whatsappAccessToken" value={formData.whatsappAccessToken} onChange={handleChange} placeholder="Enter your WhatsApp Access Token" rows={4} className={`${inputClass} resize-none`} />
+                  </div>
+                </div>
+              </section>
+
+              <button
+                type="submit"
+                disabled={saving}
+                className="w-full rounded-2xl bg-emerald-600 px-6 py-3.5 text-sm font-black text-white shadow-xl shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save Settings'}
+              </button>
+            </div>
           </form>
         )}
-      </div>
-    </div>
+      </section>
+    </main>
   )
 }
 

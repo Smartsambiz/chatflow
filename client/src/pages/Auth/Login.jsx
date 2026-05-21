@@ -23,7 +23,6 @@ function Login() {
 
     try {
       const response = await api.post('/auth/login', formData)
-      // Save token and user to localStorage
       localStorage.setItem('token', response.data.token)
       localStorage.setItem('user', JSON.stringify(response.data.user))
       navigate('/')
@@ -35,70 +34,81 @@ function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 w-full max-w-md p-8">
-
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-green-600">ChatFlow</h1>
-          <p className="text-gray-500 mt-2">Sign in to your dashboard</p>
+    <div className="flex min-h-screen items-center justify-center bg-[#f4f7f2] p-4">
+      <div className="grid w-full max-w-5xl overflow-hidden rounded-[2rem] border border-emerald-950/10 bg-white shadow-2xl shadow-slate-950/10 lg:grid-cols-[1fr_0.9fr]">
+        <div className="hidden bg-slate-950 p-10 text-white lg:flex lg:flex-col lg:justify-between">
+          <div>
+            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-emerald-500 text-lg font-black">C</div>
+            <h2 className="mt-8 text-4xl font-black tracking-tight">Turn every WhatsApp chat into a customer moment.</h2>
+            <p className="mt-4 text-sm leading-6 text-slate-300">
+              ChatFlow keeps conversations, leads, and smart replies together for teams that want to move faster.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {['Leads', 'Replies', 'Growth'].map((item) => (
+              <div key={item} className="rounded-2xl border border-white/10 bg-white/10 p-4 text-sm font-bold">
+                {item}
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Error message */}
-        {error && (
-          <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-lg mb-6">
-            {error}
-          </div>
-        )}
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="adaeze@gmail.com"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              required
-            />
+        <div className="p-6 sm:p-10">
+          <div className="mb-8">
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-emerald-700">Welcome back</p>
+            <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Sign in to ChatFlow</h1>
+            <p className="mt-2 text-slate-500">Open your customer dashboard and keep the conversation moving.</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="••••••••"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              required
-            />
-          </div>
+          {error && (
+            <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+              {error}
+            </div>
+          )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-green-600 text-white py-3 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label className="mb-2 block text-sm font-bold text-slate-700">Email</label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="adaeze@gmail.com"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
+                required
+              />
+            </div>
 
-        <p className="text-center text-sm text-gray-500 mt-6">
-          Don't have an account?{' '}
-          <Link to="/register" className="text-green-600 font-medium hover:underline">
-            Create one
-          </Link>
-        </p>
+            <div>
+              <label className="mb-2 block text-sm font-bold text-slate-700">Password</label>
+              <input
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                placeholder="Enter your password"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
+                required
+              />
+            </div>
 
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-2xl bg-slate-950 py-3.5 text-sm font-bold text-white shadow-xl shadow-slate-950/15 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? 'Signing in...' : 'Sign In'}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-slate-500">
+            Don't have an account?{' '}
+            <Link to="/register" className="font-bold text-emerald-700 hover:underline">
+              Create one
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   )

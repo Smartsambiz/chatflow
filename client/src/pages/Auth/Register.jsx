@@ -11,6 +11,13 @@ function Register() {
     email: '',
     password: '',
     phone: '',
+    businessCategory: '',
+    description: '',
+    productsServices: '',
+    productImageUrls: '',
+    bankName: '',
+    accountName: '',
+    accountNumber: '',
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -36,112 +43,116 @@ function Register() {
     }
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 w-full max-w-md p-8">
+  const fields = [
+    { label: 'Business Name', name: 'businessName', type: 'text', placeholder: 'Adaeze Boutique', required: true },
+    { label: 'Your Name', name: 'ownerName', type: 'text', placeholder: 'Adaeze Obi', required: true },
+    { label: 'Email', name: 'email', type: 'email', placeholder: 'adaeze@gmail.com', required: true },
+    { label: 'Phone Number', name: 'phone', type: 'text', placeholder: '08012345678' },
+    { label: 'Password', name: 'password', type: 'password', placeholder: 'Create a secure password', required: true },
+    { label: 'Business Category', name: 'businessCategory', type: 'text', placeholder: 'Fashion, food, beauty, logistics...' },
+    { label: 'Bank Name', name: 'bankName', type: 'text', placeholder: 'GTBank' },
+    { label: 'Account Name', name: 'accountName', type: 'text', placeholder: 'Adaeze Boutique' },
+    { label: 'Account Number', name: 'accountNumber', type: 'text', placeholder: '0123456789' },
+  ]
 
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-green-600">ChatFlow</h1>
-          <p className="text-gray-500 mt-2">Create your business account</p>
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#f4f7f2] p-4">
+      <div className="grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-emerald-950/10 bg-white shadow-2xl shadow-slate-950/10 lg:grid-cols-[0.85fr_1fr]">
+        <div className="hidden bg-slate-950 p-10 text-white lg:flex lg:flex-col lg:justify-between">
+          <div>
+            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-emerald-500 text-lg font-black">C</div>
+            <h2 className="mt-8 text-4xl font-black tracking-tight">Build a premium front desk for your WhatsApp customers.</h2>
+            <p className="mt-4 text-sm leading-6 text-slate-300">
+              Create your workspace, connect WhatsApp, and give every client a faster, more professional experience.
+            </p>
+          </div>
+          <div className="rounded-3xl border border-white/10 bg-white/10 p-5">
+            <p className="text-sm font-bold text-emerald-300">Designed for growing teams</p>
+            <p className="mt-2 text-sm leading-6 text-slate-300">Centralize customer conversations without losing the personal touch.</p>
+          </div>
         </div>
 
-        {error && (
-          <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-lg mb-6">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Business Name
-            </label>
-            <input
-              type="text"
-              name="businessName"
-              value={formData.businessName}
-              onChange={handleChange}
-              placeholder="Adaeze Boutique"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              required
-            />
+        <div className="p-6 sm:p-10">
+          <div className="mb-8">
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-emerald-700">Start selling smarter</p>
+            <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Create your ChatFlow account</h1>
+            <p className="mt-2 text-slate-500">Set up your business workspace in a minute.</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Your Name
-            </label>
-            <input
-              type="text"
-              name="ownerName"
-              value={formData.ownerName}
-              onChange={handleChange}
-              placeholder="Adaeze Obi"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              required
-            />
-          </div>
+          {error && (
+            <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+              {error}
+            </div>
+          )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="adaeze@gmail.com"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              required
-            />
-          </div>
+          <form onSubmit={handleSubmit} className="grid gap-5 sm:grid-cols-2">
+            {fields.map((field) => (
+              <div key={field.name} className={field.name === 'password' || field.name === 'businessCategory' ? 'sm:col-span-2' : ''}>
+                <label className="mb-2 block text-sm font-bold text-slate-700">{field.label}</label>
+                <input
+                  type={field.type}
+                  name={field.name}
+                  value={formData[field.name]}
+                  onChange={handleChange}
+                  placeholder={field.placeholder}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
+                  required={field.required}
+                />
+              </div>
+            ))}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Phone Number
-            </label>
-            <input
-              type="text"
-              name="phone"
-              value={formData.phone}
-              onChange={handleChange}
-              placeholder="08012345678"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            />
-          </div>
+            <div className="sm:col-span-2">
+              <label className="mb-2 block text-sm font-bold text-slate-700">Business Description</label>
+              <textarea
+                name="description"
+                value={formData.description}
+                onChange={handleChange}
+                placeholder="What your business does, where you serve, and what customers usually ask."
+                rows={3}
+                className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="••••••••"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              required
-            />
-          </div>
+            <div className="sm:col-span-2">
+              <label className="mb-2 block text-sm font-bold text-slate-700">Products or Services</label>
+              <textarea
+                name="productsServices"
+                value={formData.productsServices}
+                onChange={handleChange}
+                placeholder="List products, services, prices, sizes, delivery areas, booking rules, and FAQs."
+                rows={4}
+                className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-green-600 text-white py-3 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Creating account...' : 'Create Account'}
-          </button>
-        </form>
+            <div className="sm:col-span-2">
+              <label className="mb-2 block text-sm font-bold text-slate-700">Product Image Links</label>
+              <textarea
+                name="productImageUrls"
+                value={formData.productImageUrls}
+                onChange={handleChange}
+                placeholder="Paste one image URL per line."
+                rows={3}
+                className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
+              />
+            </div>
 
-        <p className="text-center text-sm text-gray-500 mt-6">
-          Already have an account?{' '}
-          <Link to="/login" className="text-green-600 font-medium hover:underline">
-            Sign in
-          </Link>
-        </p>
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-2xl bg-slate-950 py-3.5 text-sm font-bold text-white shadow-xl shadow-slate-950/15 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2"
+            >
+              {loading ? 'Creating account...' : 'Create Account'}
+            </button>
+          </form>
 
+          <p className="mt-6 text-center text-sm text-slate-500">
+            Already have an account?{' '}
+            <Link to="/login" className="font-bold text-emerald-700 hover:underline">
+              Sign in
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   )

@@ -1,8 +1,18 @@
 const Customer = require('../models/Customer');
 const Message = require('../models/Message');
 const User = require('../models/User');
-const { sendTextMessage } = require('../services/whatsappService');
+const path = require('path');
+const crypto = require('crypto');
+const fs = require('fs/promises');
+const { sendTextMessage, uploadImageMedia, sendImageMediaMessage } = require('../services/whatsappService');
 const { generateReply } = require('../services/openai')
+const { cancelAutoReply } = require('../services/autoReplyScheduler');
+
+const IMAGE_MIME_EXTENSIONS = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
 
 // GET /api/conversations — list all customers for this business
 const getConversations = async (req, res) => {
@@ -15,6 +25,88 @@ const getConversations = async (req, res) => {
   } catch (error) {
     console.error('getConversations error:', error.message);
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// POST /api/conversations/send-image — upload and send an image to a customer
+const sendImage = async (req, res) => {
+  try {
+    const { customerId, imageDataUrl, caption = '' } = req.body;
+
+    if (!customerId || !imageDataUrl) {
+      return res.status(400).json({ message: 'Customer and image are required' });
+    }
+
+    const imageMatch = String(imageDataUrl).match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!imageMatch) {
+      return res.status(400).json({ message: 'Please upload a JPG, PNG, or WebP image.' });
+    }
+
+    const [, mimeType, base64Data] = imageMatch;
+    const imageBuffer = Buffer.from(base64Data, 'base64');
+    const maxImageBytes = 5 * 1024 * 1024;
+
+    if (imageBuffer.length > maxImageBytes) {
+      return res.status(400).json({ message: 'Image is too large. Please upload an image under 5MB.' });
+    }
+
+    const customer = await Customer.findById(customerId);
+    if (!customer) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    cancelAutoReply(req.user.id, customer._id);
+
+    const business = await User.findById(req.user.id);
+    if (!business.whatsappPhoneNumberId || !business.whatsappAccessToken) {
+      return res.status(400).json({
+        message: 'WhatsApp not configured. Please add your Phone Number ID and Access Token in settings.',
+      });
+    }
+
+    const extension = IMAGE_MIME_EXTENSIONS[mimeType];
+    const filename = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}.${extension}`;
+    const uploadDir = path.join(__dirname, '..', 'uploads', 'chat-images');
+    const uploadPath = path.join(uploadDir, filename);
+
+    await fs.mkdir(uploadDir, { recursive: true });
+    await fs.writeFile(uploadPath, imageBuffer);
+
+    const mediaUpload = await uploadImageMedia(
+      business.whatsappPhoneNumberId,
+      business.whatsappAccessToken,
+      imageBuffer,
+      mimeType,
+      filename
+    );
+
+    await sendImageMediaMessage(
+      business.whatsappPhoneNumberId,
+      business.whatsappAccessToken,
+      customer.phone,
+      mediaUpload.id,
+      caption.trim()
+    );
+
+    const savedMessage = await Message.create({
+      businessId: req.user.id,
+      customerId: customer._id,
+      direction: 'outbound',
+      type: 'image',
+      content: caption.trim(),
+      mediaUrl: `/uploads/chat-images/${filename}`,
+      mediaId: mediaUpload.id,
+      status: 'sent',
+      timestamp: new Date(),
+    });
+
+    res.json({
+      message: 'Image sent successfully',
+      data: savedMessage,
+    });
+  } catch (error) {
+    console.error('sendImage error:', error.response?.data || error.message);
+    res.status(500).json({ message: 'Failed to send image. Please try again.' });
   }
 };
 
@@ -50,6 +142,8 @@ const sendMessage = async (req, res) => {
     if (!customer) {
       return res.status(404).json({ message: 'Customer not found' });
     }
+
+    cancelAutoReply(req.user.id, customer._id);
 
     // Get the business WhatsApp credentials
     const business = await User.findById(req.user.id);
@@ -133,6 +227,11 @@ const getAiSuggestion = async(req, res)=>{
       businessName: business.businessName,
       businessCategory: business.businessCategory,
       description: business.description,
+      productsServices: business.productsServices,
+      productImageUrls: business.productImageUrls,
+      bankName: business.bankName,
+      accountName: business.accountName,
+      accountNumber: business.accountNumber,
     });
 
     if(!suggestion){
@@ -150,4 +249,4 @@ const getAiSuggestion = async(req, res)=>{
   }
 }
 
-module.exports = { getConversations, getMessages, sendMessage, getAiSuggestion };
+module.exports = { getConversations, getMessages, sendMessage, sendImage, getAiSuggestion };

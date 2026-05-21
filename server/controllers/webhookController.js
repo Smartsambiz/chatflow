@@ -1,8 +1,8 @@
 const User = require('../models/User');
 const Customer = require('../models/Customer');
 const Message = require('../models/Message');
-const { sendTextMessage } = require('../services/whatsappService');
 const { generateReply } = require('../services/openai');
+const { scheduleAutoReply } = require('../services/autoReplyScheduler');
 
 
 // === verify webhook ===//
@@ -79,7 +79,12 @@ const receiveMessage = async (req, res)=>{
         const aiSuggestion = await generateReply(messageText, {
             businessName: business.businessName,
             businessCategory: business.businessCategory,
-            description: business.description
+            description: business.description,
+            productsServices: business.productsServices,
+            productImageUrls: business.productImageUrls,
+            bankName: business.bankName,
+            accountName: business.accountName,
+            accountNumber: business.accountNumber,
         });
 
         if(aiSuggestion){
@@ -87,7 +92,7 @@ const receiveMessage = async (req, res)=>{
         }
 
         // save the message to the database
-        await Message.create({
+        const savedInboundMessage = await Message.create({
             businessId: business._id,
             customerId: customer._id,
             waMessageId,
@@ -99,31 +104,6 @@ const receiveMessage = async (req, res)=>{
         });
 
         console.log('Message saved to database for customer:', customer.phone);
-
-        // Auto-reply with AI suggestion
-        if(aiSuggestion){
-            try{
-                await sendTextMessage(
-                    business.whatsappPhoneNumberId,
-                    business.whatsappAccessToken,
-                    customerPhone,
-                    aiSuggestion
-                );
-
-                await Message.create({
-                    businessId: business._id,
-                    customerId: customer._id,
-                    direction: 'outbound',
-                    type: 'text',
-                    content: aiSuggestion,
-                    status: 'sent',
-                    timestamp: new Date(),
-                })
-                console.log('Auto-reply sent to customer:', customer.phone);
-            } catch (autoReplyError){
-                console.error('Error sending auto-reply:', autoReplyError);
-            }
-        }
 
         //Always respond with 200 to Meta,
         // if you don't, Meta will keep retrying.
@@ -141,6 +121,16 @@ const receiveMessage = async (req, res)=>{
                 timestamp: new Date(),
             });
         }
+
+        scheduleAutoReply({
+            businessId: business._id,
+            customerId: customer._id,
+            inboundMessageId: savedInboundMessage._id,
+            suggestion: aiSuggestion,
+            delaySeconds: business.autoReplyDelaySeconds,
+            io,
+        });
+
         res.sendStatus(200);
     } catch (error) {
         console.error('Error receiving message:', error);

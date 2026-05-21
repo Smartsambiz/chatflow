@@ -2,6 +2,16 @@ import { useState, useEffect, useRef } from 'react'
 import api from '../../services/api'
 import { io } from 'socket.io-client'
 
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000'
+
+const getMediaUrl = (mediaUrl) => {
+  if (!mediaUrl) return ''
+  if (mediaUrl.startsWith('data:') || mediaUrl.startsWith('http://') || mediaUrl.startsWith('https://')) {
+    return mediaUrl
+  }
+  return `${SOCKET_URL}${mediaUrl}`
+}
+
 function Inbox() {
   const [conversations, setConversations] = useState([])
   const [selectedCustomer, setSelectedCustomer] = useState(null)
@@ -9,105 +19,99 @@ function Inbox() {
   const [replyText, setReplyText] = useState('')
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [messagesLoading, setMessagesLoading] = useState(false)
+  const [messagesError, setMessagesError] = useState('')
+  const [selectedImage, setSelectedImage] = useState(null)
+  const [selectedImagePreview, setSelectedImagePreview] = useState('')
+  const fileInputRef = useRef(null)
   const messagesEndRef = useRef(null)
   const [aiSuggestion, setAiSuggestion] = useState('')
   const [lastInboundId, setLastInboundId] = useState(null)
-  const [loadingAi, setLoadingAi ]= useState(false)
+  const [loadingAi, setLoadingAi] = useState(false)
 
-  // Scroll to bottom whenever messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Load all conversations on mount
   useEffect(() => {
     fetchConversations()
   }, [])
 
-  // Load messages when a customer is selected
   useEffect(() => {
     if (selectedCustomer) {
       fetchMessages(selectedCustomer._id)
     }
   }, [selectedCustomer])
 
-  useEffect(()=>{
+  useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user') || '{}')
-    const socket = io('http://localhost:5000')
+    const socket = io(SOCKET_URL)
 
     socket.on('connect', () => {
-      console.log('Socket connected:', socket.id)
-      console.log('Socket joining room with business id:', user._id)
       if (user?._id) {
         socket.emit('joinBusinessRoom', user._id)
-      } else {
-        console.warn('No business ID found in localStorage user')
       }
     })
 
-    socket.on('new_message', (data)=>{
-      console.log('Socket new_message received:', data)
+    socket.on('new_message', (data) => {
       fetchConversations()
 
       const currentCustomerId = selectedCustomer?._id ? String(selectedCustomer._id) : null
       const incomingCustomerId = data?.customerId ? String(data.customerId) : null
-
-      console.log('Socket compare debug:', {
-        selectedCustomer,
-        currentCustomerId,
-        incomingCustomerId,
-      })
 
       if (currentCustomerId && incomingCustomerId && currentCustomerId === incomingCustomerId) {
         fetchMessages(data.customerId)
       }
     })
 
-    return ()=>{
+    return () => {
       socket.disconnect()
     }
   }, [selectedCustomer])
 
   const fetchConversations = async () => {
     try {
+      setError('')
       const response = await api.get('/conversations')
-      console.log('Conversations response:', response)
-      setConversations(response.data.customers || response.customers || [])
+      setConversations(response.data?.customers || [])
     } catch (err) {
       console.error('Failed to fetch conversations:', err)
       setConversations([])
+      setError(err.response?.data?.message || 'Could not load customers. Please check your login session and server connection.')
     } finally {
       setLoading(false)
     }
   }
 
-  // Updated fetchMessages to use aiSuggestions
-
   const fetchMessages = async (customerId) => {
     try {
+      setMessagesLoading(true)
+      setMessagesError('')
       const response = await api.get(`/conversations/${customerId}`)
-      const msgs = response.data.messages
-      console.log('Messages response:', response.data.messages)
+      const msgs = response.data?.messages || []
       setMessages(msgs)
 
-      // Find the last inbound message and show
-      const inboundMessages = msgs.filter(m=> m.direction ==='inbound')
-      if(inboundMessages.length > 0){
-        const lastInbound = inboundMessages[inboundMessages.length -1]
+      const inboundMessages = msgs.filter((m) => m.direction === 'inbound')
+      if (inboundMessages.length > 0) {
+        const lastInbound = inboundMessages[inboundMessages.length - 1]
         setLastInboundId(lastInbound._id)
         setAiSuggestion(lastInbound.aiSuggestion || '')
-      }else{
+      } else {
         setAiSuggestion('')
         setLastInboundId(null)
       }
     } catch (err) {
       console.error('Failed to fetch messages:', err)
       setMessages([])
+      setMessagesError(err.response?.data?.message || 'Could not load this customer conversation.')
+    } finally {
+      setMessagesLoading(false)
     }
   }
 
   const handleSend = async () => {
-    if (!replyText.trim() || !selectedCustomer) return
+    if ((!replyText.trim() && !selectedImage) || !selectedCustomer) return
     setSending(true)
 
     const messageToSend = replyText.trim()
@@ -117,28 +121,36 @@ function Inbox() {
       businessId: selectedCustomer._id,
       customerId: selectedCustomer._id,
       direction: 'outbound',
-      type: 'text',
+      type: selectedImage ? 'image' : 'text',
       content: messageToSend,
+      mediaUrl: selectedImagePreview,
       status: 'sent',
       timestamp: new Date().toISOString(),
     }
 
-    console.log('Sending message:', messageToSend, 'to', selectedCustomer._id)
     setMessages((prevMessages) => [...prevMessages, optimisticMessage])
     setReplyText('')
+    setSelectedImage(null)
+    setSelectedImagePreview('')
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
 
     try {
-      const response = await api.post('/conversations/send', {
-        customerId: selectedCustomer._id,
-        message: messageToSend,
-      })
-      console.log('Send response:', response.data)
+      const response = selectedImage
+        ? await api.post('/conversations/send-image', {
+            customerId: selectedCustomer._id,
+            imageDataUrl: selectedImagePreview,
+            caption: messageToSend,
+          })
+        : await api.post('/conversations/send', {
+            customerId: selectedCustomer._id,
+            message: messageToSend,
+          })
 
       if (response.data?.data) {
         setMessages((prevMessages) =>
-          prevMessages.map((msg) =>
-            msg._id === tempId ? response.data.data : msg
-          )
+          prevMessages.map((msg) => (msg._id === tempId ? response.data.data : msg))
         )
       }
 
@@ -146,20 +158,51 @@ function Inbox() {
       await fetchConversations()
     } catch (err) {
       console.error('Failed to send message:', err)
-
       setMessages((prevMessages) => prevMessages.filter((msg) => msg._id !== tempId))
 
       if (err.response?.data?.error === 'TOKEN_EXPIRED') {
         alert('Your WhatsApp access token has expired. Please go to Settings to update your access token.')
       } else {
-        alert('Failed to send message. Please try again.')
+        alert(err.response?.data?.message || 'Failed to send message. Please try again.')
       }
     } finally {
       setSending(false)
     }
   }
 
-  // Allow sending with Enter key
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      alert('Please choose a JPG, PNG, or WebP image.')
+      e.target.value = ''
+      return
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Please choose an image under 5MB.')
+      e.target.value = ''
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      setSelectedImage(file)
+      setSelectedImagePreview(String(reader.result || ''))
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const clearSelectedImage = () => {
+    setSelectedImage(null)
+    setSelectedImagePreview('')
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -167,32 +210,27 @@ function Inbox() {
     }
   }
 
-  const handleRegenerateAi = async ()=>{
-    if(!lastInboundId) return
+  const handleRegenerateAi = async () => {
+    if (!lastInboundId) return
     setLoadingAi(true)
 
     try {
-      const response = await api.post('/conversations/ai-suggest',{
+      const response = await api.post('/conversations/ai-suggest', {
         messageId: lastInboundId,
       })
       setAiSuggestion(response.data.suggestion)
-    } catch(err){
+    } catch (err) {
       console.error('Failed to get AI suggestion:', err)
-    } finally{
+    } finally {
       setLoadingAi(false)
     }
-    }
+  }
 
   const formatTime = (timestamp) => {
     try {
       const date = new Date(timestamp)
-      if (isNaN(date.getTime())) {
-        return 'Invalid time'
-      }
-      return date.toLocaleTimeString('en-NG', {
-        hour: '2-digit',
-        minute: '2-digit',
-      })
+      if (isNaN(date.getTime())) return 'Invalid time'
+      return date.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })
     } catch (error) {
       console.error('Error formatting time:', timestamp, error)
       return 'Invalid time'
@@ -202,196 +240,258 @@ function Inbox() {
   const formatDate = (timestamp) => {
     try {
       const date = new Date(timestamp)
-      if (isNaN(date.getTime())) {
-        return 'Invalid date'
-      }
-      return date.toLocaleDateString('en-NG', {
-        day: 'numeric',
-        month: 'short',
-      })
+      if (isNaN(date.getTime())) return 'Invalid date'
+      return date.toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })
     } catch (error) {
       console.error('Error formatting date:', timestamp, error)
       return 'Invalid date'
     }
   }
 
-  
-
   return (
-    <div className="flex h-full">
-
-      {/* Left panel — conversation list */}
-      <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-4 border-b border-gray-200">
-          <h2 className="font-semibold text-gray-800">Inbox</h2>
-          <p className="text-xs text-gray-500 mt-1">
-            {conversations.length} conversations
-          </p>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {loading ? (
-            <div className="p-4 text-center text-gray-400 text-sm">
-              Loading...
-            </div>
-          ) : conversations.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="text-4xl mb-3">💬</p>
-              <p className="text-gray-500 text-sm">No conversations yet</p>
-              <p className="text-gray-400 text-xs mt-1">
-                Messages will appear here when customers WhatsApp you
-              </p>
-            </div>
-          ) : (
-            conversations.map((customer) => (
-              <div
-                key={customer._id}
-                onClick={() => setSelectedCustomer(customer)}
-                className={`flex items-center gap-3 p-4 cursor-pointer border-b border-gray-100 hover:bg-gray-50 transition-colors ${
-                  selectedCustomer?._id === customer._id ? 'bg-green-50' : ''
-                }`}
-              >
-                {/* Avatar */}
-                <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-semibold text-sm flex-shrink-0">
-                  {customer.name.charAt(0).toUpperCase()}
-                </div>
-
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center">
-                    <p className="text-sm font-medium text-gray-800 truncate">
-                      {customer.name}
-                    </p>
-                    <p className="text-xs text-gray-400 flex-shrink-0 ml-2">
-                      {formatDate(customer.lastMessageAt)}
-                    </p>
-                  </div>
-                  <p className="text-xs text-gray-500 truncate mt-0.5">
-                    {customer.phone}
-                  </p>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* Right panel — chat window */}
-      <div className="flex-1 flex flex-col bg-gray-50">
-        {selectedCustomer ? (
-          <>
-            {/* Chat header */}
-            <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-semibold">
-                {selectedCustomer.name.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <p className="font-medium text-gray-800">{selectedCustomer.name}</p>
-                <p className="text-xs text-gray-500">{selectedCustomer.phone}</p>
-              </div>
-              <span className={`ml-auto text-xs px-2 py-1 rounded-full ${
-                selectedCustomer.status === 'lead'
-                  ? 'bg-yellow-100 text-yellow-700'
-                  : 'bg-green-100 text-green-700'
-              }`}>
-                {selectedCustomer.status}
+    <main className="flex min-h-0 flex-1 overflow-hidden p-4 pb-28 sm:p-6 sm:pb-28 lg:h-screen lg:p-8">
+      <div className="flex min-h-0 w-full overflow-hidden rounded-[2rem] border border-emerald-950/10 bg-white shadow-2xl shadow-slate-950/10">
+        <aside className={`${selectedCustomer ? 'hidden md:flex' : 'flex'} w-full flex-col border-r border-emerald-950/10 bg-white md:w-80 lg:w-96`}>
+          <div className="border-b border-emerald-950/10 p-5">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Inbox</p>
+            <div className="mt-2 flex items-end justify-between">
+              <h2 className="text-2xl font-black tracking-tight text-slate-950">Conversations</h2>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+                {conversations.length}
               </span>
             </div>
+          </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-3">
-              {messages.map((message) => (
-                <div
-                  key={message._id}
-                  className={`flex ${
-                    message.direction === 'outbound' ? 'justify-end' : 'justify-start'
-                  }`}
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            {loading ? (
+              <div className="rounded-3xl bg-slate-50 p-6 text-center text-sm font-medium text-slate-400">
+                Loading conversations...
+              </div>
+            ) : error ? (
+              <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-center">
+                <p className="text-sm font-black text-rose-700">Customers unavailable</p>
+                <p className="mt-2 text-xs leading-5 text-rose-600">{error}</p>
+                <button
+                  onClick={fetchConversations}
+                  className="mt-4 rounded-2xl bg-rose-600 px-4 py-2 text-xs font-black text-white transition hover:bg-rose-700"
                 >
-                  <div
-                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl text-sm ${
-                      message.direction === 'outbound'
-                        ? 'bg-green-600 text-white rounded-br-sm'
-                        : 'bg-white text-gray-800 border border-gray-200 rounded-bl-sm'
+                  Try again
+                </button>
+              </div>
+            ) : conversations.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+                <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-emerald-100 text-lg font-black text-emerald-700">0</div>
+                <p className="mt-4 text-sm font-bold text-slate-700">No conversations yet</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Messages will appear here when customers contact you on WhatsApp.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {conversations.map((customer) => (
+                  <button
+                    key={customer._id}
+                    onClick={() => setSelectedCustomer(customer)}
+                    className={`flex w-full items-center gap-3 rounded-3xl p-4 text-left transition ${
+                      selectedCustomer?._id === customer._id
+                        ? 'bg-slate-950 text-white shadow-xl shadow-slate-950/10'
+                        : 'text-slate-700 hover:bg-emerald-50'
                     }`}
                   >
-                    <p>{message.content}</p>
-                    <p className={`text-xs mt-1 ${
-                      message.direction === 'outbound'
-                        ? 'text-green-200'
-                        : 'text-gray-400'
+                    <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-sm font-black ${
+                      selectedCustomer?._id === customer._id ? 'bg-emerald-400 text-slate-950' : 'bg-emerald-100 text-emerald-700'
                     }`}>
-                      {formatTime(message.timestamp)}
+                      {customer.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate text-sm font-black">{customer.name}</p>
+                        <p className={`shrink-0 text-xs ${selectedCustomer?._id === customer._id ? 'text-slate-300' : 'text-slate-400'}`}>
+                          {formatDate(customer.lastMessageAt)}
+                        </p>
+                      </div>
+                      <p className={`mt-1 truncate text-xs ${selectedCustomer?._id === customer._id ? 'text-slate-300' : 'text-slate-500'}`}>
+                        {customer.phone}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </aside>
+
+        <section className={`${selectedCustomer ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col bg-[#f6f8f3]`}>
+          {selectedCustomer ? (
+            <>
+              <div className="flex items-center gap-3 border-b border-emerald-950/10 bg-white/90 px-4 py-5 backdrop-blur sm:px-6">
+                <button
+                  onClick={() => setSelectedCustomer(null)}
+                  className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 md:hidden"
+                >
+                  Back
+                </button>
+                <div className="grid h-12 w-12 place-items-center rounded-2xl bg-emerald-100 font-black text-emerald-700">
+                  {selectedCustomer.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate font-black text-slate-950">{selectedCustomer.name}</p>
+                  <p className="truncate text-xs font-medium text-slate-500">{selectedCustomer.phone}</p>
+                </div>
+                <span className={`ml-auto rounded-full px-3 py-1 text-xs font-bold capitalize ${
+                  selectedCustomer.status === 'lead'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-emerald-100 text-emerald-700'
+                }`}>
+                  {selectedCustomer.status}
+                </span>
+              </div>
+
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-6">
+                {messagesLoading ? (
+                  <div className="rounded-3xl bg-white p-6 text-center text-sm font-medium text-slate-400">
+                    Loading messages...
+                  </div>
+                ) : messagesError ? (
+                  <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-center">
+                    <p className="text-sm font-black text-rose-700">Messages unavailable</p>
+                    <p className="mt-2 text-xs leading-5 text-rose-600">{messagesError}</p>
+                    <button
+                      onClick={() => fetchMessages(selectedCustomer._id)}
+                      className="mt-4 rounded-2xl bg-rose-600 px-4 py-2 text-xs font-black text-white transition hover:bg-rose-700"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="rounded-3xl bg-white p-8 text-center">
+                    <p className="text-sm font-black text-slate-700">No messages yet</p>
+                    <p className="mt-2 text-xs leading-5 text-slate-500">
+                      This customer is in your list, but no chat history has been saved yet.
                     </p>
+                  </div>
+                ) : messages.map((message) => (
+                  <div key={message._id} className={`flex ${message.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-xs rounded-3xl px-4 py-3 text-sm shadow-sm lg:max-w-md ${
+                      message.direction === 'outbound'
+                        ? 'rounded-br-md bg-emerald-600 text-white'
+                        : 'rounded-bl-md border border-emerald-950/10 bg-white text-slate-800'
+                    }`}>
+                      {message.type === 'image' && message.mediaUrl ? (
+                        <div className="space-y-2">
+                          <img
+                            src={getMediaUrl(message.mediaUrl)}
+                            alt={message.content || 'Chat image'}
+                            className="max-h-72 w-full rounded-2xl object-cover"
+                          />
+                          {message.content && <p className="leading-6">{message.content}</p>}
+                        </div>
+                      ) : (
+                        <p className="leading-6">{message.content}</p>
+                      )}
+                      <p className={`mt-2 text-[11px] font-medium ${message.direction === 'outbound' ? 'text-emerald-100' : 'text-slate-400'}`}>
+                        {formatTime(message.timestamp)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {aiSuggestion && (
+                <div className="border-t border-cyan-200 bg-cyan-50/90 px-5 py-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-2 flex items-center gap-3">
+                        <span className="rounded-full bg-cyan-600 px-3 py-1 text-xs font-black text-white">AI suggestion</span>
+                        <button
+                          onClick={handleRegenerateAi}
+                          disabled={loadingAi}
+                          className="text-xs font-bold text-cyan-700 transition hover:text-cyan-900 disabled:opacity-50"
+                        >
+                          {loadingAi ? 'Thinking...' : 'Regenerate'}
+                        </button>
+                      </div>
+                      <p className="text-sm leading-6 text-slate-700">{aiSuggestion}</p>
+                    </div>
+                    <button
+                      onClick={() => setReplyText(aiSuggestion)}
+                      className="shrink-0 rounded-2xl bg-slate-950 px-4 py-2 text-xs font-bold text-white transition hover:bg-cyan-700"
+                    >
+                      Use this
+                    </button>
                   </div>
                 </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
+              )}
 
-            {/* AI Suggestion Bar */}
-            {aiSuggestion && (
-              <div className='bg-blue-50 border-t border-blue-100 px-4 py-3'>
-                <div className='flex items-start justify-between gap-3'>
-                  <div className='flex-1'>
-                    <div className='fflex items-center gap-2 mb-1'>
-                      <span className='text-xs font-semibold text-blue-600'
-                      >Ai Suggestion</span>
-                      <button
-                        onClick={handleRegenerateAi}
-                        disabled={loadingAi}
-                        className='text-xs text-blue-400 hover:text-blue-600 transition-colors disabled:opacity-50'
-                      >
-                        {loadingAi ? 'Thinking...': 'Regenerate'}
-                      </button>
+              <div className="border-t border-emerald-950/10 bg-white p-4">
+                {selectedImagePreview && (
+                  <div className="mb-3 flex items-start gap-3 rounded-3xl border border-emerald-100 bg-emerald-50 p-3">
+                    <img
+                      src={selectedImagePreview}
+                      alt="Selected upload"
+                      className="h-20 w-20 rounded-2xl object-cover"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-black text-slate-800">{selectedImage?.name}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">Add an optional caption, then send.</p>
                     </div>
-                    <p className='text-sm text-gray-700 leading-relaxed'>
-                      {aiSuggestion}
-                    </p>
+                    <button
+                      onClick={clearSelectedImage}
+                      className="rounded-xl bg-white px-3 py-2 text-xs font-black text-slate-600 shadow-sm"
+                    >
+                      Remove
+                    </button>
                   </div>
+                )}
+                <div className="flex gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-2 focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-500/10">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
                   <button
-                    onClick={()=> setReplyText(aiSuggestion)}
-                    className='flex-shrink-0 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colorss'
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={sending}
+                    className="self-end rounded-2xl bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Use this
+                    Image
+                  </button>
+                  <textarea
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={selectedImage ? 'Add a caption...' : 'Type a reply. Press Enter to send.'}
+                    rows={2}
+                    className="min-h-12 flex-1 resize-none bg-transparent px-3 py-2 text-sm text-slate-900 outline-none"
+                  />
+                  <button
+                    onClick={handleSend}
+                    disabled={sending || (!replyText.trim() && !selectedImage)}
+                    className="self-end rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {sending ? 'Sending...' : 'Send'}
                   </button>
                 </div>
               </div>
-            )}
-
-            {/* Reply Box */}
-            <div className="bg-white border-t border-gray-200 p-4 flex gap-3">
-              <textarea
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Type a reply... (Enter to send)"
-                rows={2}
-                className="flex-1 border border-gray-300 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-              <button
-                onClick={handleSend}
-                disabled={sending || !replyText.trim()}
-                className="bg-green-600 text-white px-6 rounded-xl text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {sending ? '...' : 'Send'}
-              </button>
+            </>
+          ) : (
+            <div className="flex flex-1 items-center justify-center p-6">
+              <div className="max-w-sm text-center">
+                <div className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-emerald-100 text-xl font-black text-emerald-700">CF</div>
+                <p className="mt-5 text-lg font-black text-slate-900">Select a conversation</p>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Choose a customer from the list to open the thread and reply with confidence.
+                </p>
+              </div>
             </div>
-          </>
-        ) : (
-          // No conversation selected yet
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <p className="text-5xl mb-4">💬</p>
-              <p className="text-gray-500 font-medium">Select a conversation</p>
-              <p className="text-gray-400 text-sm mt-1">
-                Choose a customer from the left to start chatting
-              </p>
-            </div>
-          </div>
-        )}
+          )}
+        </section>
       </div>
-
-    </div>
+    </main>
   )
 }
 

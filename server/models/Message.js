@@ -36,6 +36,10 @@ const messageSchema = new mongoose.Schema({
         default: '',
 
     },
+    mediaId: {
+        type: String,
+        default: '',
+    },
     status: {
         type: String,
         enum: ['sent', 'delivered', 'read', 'failed'],

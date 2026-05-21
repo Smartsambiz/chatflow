@@ -59,6 +59,36 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: '',
     }, 
+    productsServices: {
+        type: String,
+        default: '',
+    },
+    productImageUrls: {
+        type: [String],
+        default: [],
+    },
+    bankName: {
+        type: String,
+        default: '',
+    },
+    accountName: {
+        type: String,
+        default: '',
+    },
+    accountNumber: {
+        type: String,
+        default: '',
+    },
+    autoReplyEnabled: {
+        type: Boolean,
+        default: true,
+    },
+    autoReplyDelaySeconds: {
+        type: Number,
+        default: 30,
+        min: 5,
+        max: 300,
+    },
     isActive: {
         type: Boolean,
         default: true,

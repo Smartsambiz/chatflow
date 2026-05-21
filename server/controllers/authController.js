@@ -20,6 +20,13 @@ const sanitizeUser = (user)=>({
     logourl: user.logourl,
     businessCategory: user.businessCategory,
     description: user.description,
+    productsServices: user.productsServices,
+    productImageUrls: user.productImageUrls,
+    bankName: user.bankName,
+    accountName: user.accountName,
+    accountNumber: user.accountNumber,
+    autoReplyEnabled: user.autoReplyEnabled,
+    autoReplyDelaySeconds: user.autoReplyDelaySeconds,
     whatsappPhoneNumberId: user.whatsappPhoneNumberId,
     whatsappAccessToken: user.whatsappAccessToken,
 });
@@ -27,7 +34,20 @@ const sanitizeUser = (user)=>({
 //Register a new user
 const register = async (req, res)=>{
     try {
-        const {businessName, ownerName, email, password, phone} = req.body;
+        const {
+            businessName,
+            ownerName,
+            email,
+            password,
+            phone,
+            businessCategory,
+            description,
+            productsServices,
+            productImageUrls,
+            bankName,
+            accountName,
+            accountNumber,
+        } = req.body;
 
         //check all fields
         if(!businessName || !ownerName || !email || !password){
@@ -61,6 +81,15 @@ const register = async (req, res)=>{
             passwordHash,
             phone,
             slug,
+            businessCategory,
+            description,
+            productsServices,
+            productImageUrls: Array.isArray(productImageUrls)
+                ? productImageUrls
+                : String(productImageUrls || '').split('\n').map((url) => url.trim()).filter(Boolean),
+            bankName,
+            accountName,
+            accountNumber,
         });
 
         //generate a token and respond
@@ -133,10 +162,44 @@ const getCurrentUser = async (req, res)=>{
 // update profile
 const updateProfile = async (req, res)=>{
     try {
-        const {businessName, ownerName, phone, businessCategory, description, whatsappPhoneNumberId, whatsappAccessToken} = req.body;
+        const {
+            businessName,
+            ownerName,
+            phone,
+            businessCategory,
+            description,
+            productsServices,
+            productImageUrls,
+            bankName,
+            accountName,
+            accountNumber,
+            autoReplyEnabled,
+            autoReplyDelaySeconds,
+            whatsappPhoneNumberId,
+            whatsappAccessToken,
+        } = req.body;
+        const normalizedProductImageUrls = Array.isArray(productImageUrls)
+            ? productImageUrls
+            : String(productImageUrls || '').split('\n').map((url) => url.trim()).filter(Boolean);
+
         const user = await User.findByIdAndUpdate(
             req.user.id,
-            {businessName, ownerName, phone, businessCategory, description, whatsappPhoneNumberId, whatsappAccessToken},
+            {
+                businessName,
+                ownerName,
+                phone,
+                businessCategory,
+                description,
+                productsServices,
+                productImageUrls: normalizedProductImageUrls,
+                bankName,
+                accountName,
+                accountNumber,
+                autoReplyEnabled,
+                autoReplyDelaySeconds,
+                whatsappPhoneNumberId,
+                whatsappAccessToken,
+            },
             {new: true, runValidators: true}
         );
 
