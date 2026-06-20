@@ -74,7 +74,39 @@ const receiveMessage = async (req, res)=>{
 
         }
 
-        // Generate AI Suggestion before saving
+        // Save and emit the inbound message immediately, so the inbox refreshes like WhatsApp.
+        const savedInboundMessage = await Message.create({
+            businessId: business._id,
+            customerId: customer._id,
+            waMessageId,
+            direction: 'inbound',
+            type: 'text',
+            content: messageText,
+            aiSuggestion: '',
+            timestamp: new Date(),
+        });
+
+        console.log('Message saved to database for customer:', customer.phone);
+
+        const io = req.app.get('io');
+        if(io){
+            console.log('Emitting new_message to room:', business._id.toString(), {
+              customerId: customer._id,
+              customerName: customer.name,
+              message: messageText,
+            })
+            io.to(business._id.toString()).emit('new_message', {
+                customerId: customer._id,
+                customerName: customer.name,
+                message: messageText,
+                timestamp: new Date(),
+                messageDoc: savedInboundMessage,
+            });
+        }
+
+        // Always respond with 200 to Meta quickly. AI work continues after the message is visible.
+        res.sendStatus(200);
+
         console.log('Generating AI suggestion...');
         const aiSuggestion = await generateReply(messageText, {
             businessName: business.businessName,
@@ -88,38 +120,16 @@ const receiveMessage = async (req, res)=>{
         });
 
         if(aiSuggestion){
+            savedInboundMessage.aiSuggestion = aiSuggestion;
+            await savedInboundMessage.save();
             console.log(`AI suggestion ready`);
-        }
 
-        // save the message to the database
-        const savedInboundMessage = await Message.create({
-            businessId: business._id,
-            customerId: customer._id,
-            waMessageId,
-            direction: 'inbound',
-            type: 'text',
-            content: messageText,
-            aiSuggestion: aiSuggestion || '',
-            timestamp: new Date(),
-        });
-
-        console.log('Message saved to database for customer:', customer.phone);
-
-        //Always respond with 200 to Meta,
-        // if you don't, Meta will keep retrying.
-        const io = req.app.get('io');
-        if(io){
-            console.log('Emitting new_message to room:', business._id.toString(), {
-              customerId: customer._id,
-              customerName: customer.name,
-              message: messageText,
-            })
-            io.to(business._id.toString()).emit('new_message', {
-                customerId: customer._id,
-                customerName: customer.name,
-                message: messageText,
-                timestamp: new Date(),
-            });
+            if(io){
+                io.to(business._id.toString()).emit('message_updated', {
+                    customerId: customer._id,
+                    messageDoc: savedInboundMessage,
+                });
+            }
         }
 
         scheduleAutoReply({
@@ -130,11 +140,11 @@ const receiveMessage = async (req, res)=>{
             delaySeconds: business.autoReplyDelaySeconds,
             io,
         });
-
-        res.sendStatus(200);
     } catch (error) {
         console.error('Error receiving message:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        if(!res.headersSent){
+            res.status(500).json({ message: 'Internal server error' });
+        }
     }
 }
 

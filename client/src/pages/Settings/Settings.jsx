@@ -111,6 +111,44 @@ function Settings() {
           </div>
         )}
 
+        <section className="mt-6 rounded-3xl border border-emerald-950/10 bg-white p-5 shadow-xl shadow-slate-950/5 sm:p-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Quick guide</p>
+              <h2 className="mt-2 text-xl font-black text-slate-950">How to use ChatFlow</h2>
+            </div>
+            <p className="max-w-xl text-sm leading-6 text-slate-500">
+              Complete these settings once, then use Inbox daily to manage customers and replies.
+            </p>
+          </div>
+
+          <div className="mt-5 grid gap-3 md:grid-cols-3">
+            {[
+              {
+                title: '1. Connect WhatsApp',
+                body: 'Add your Phone Number ID and Access Token from Meta/Facebook Developers so ChatFlow can receive and send messages.',
+              },
+              {
+                title: '2. Teach the AI',
+                body: 'Fill in your business description, products, services, image links, prices, delivery notes, and bank details.',
+              },
+              {
+                title: '3. Work from Inbox',
+                body: 'Open Inbox to see new customer messages live, use AI suggestions, reply manually, attach images, or let auto-reply handle delays.',
+              },
+            ].map((step) => (
+              <div key={step.title} className="rounded-2xl bg-slate-50 p-4">
+                <h3 className="text-sm font-black text-slate-900">{step.title}</h3>
+                <p className="mt-2 text-xs leading-5 text-slate-600">{step.body}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-xs leading-5 text-emerald-900">
+            Product image links must be public HTTPS links if you want auto-replies to send them as WhatsApp image messages. For manual image replies, use the Image button inside Inbox.
+          </div>
+        </section>
+
         {loading ? (
           <div className="mt-6 rounded-3xl bg-white p-8 text-center text-sm font-medium text-slate-500 shadow-xl shadow-slate-950/5">
             Loading settings...

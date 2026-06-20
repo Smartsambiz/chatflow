@@ -128,7 +128,7 @@ const scheduleAutoReply = ({ businessId, customerId, inboundMessageId, suggestio
             caption
           );
 
-          await Message.create({
+          const savedImageMessage = await Message.create({
             businessId,
             customerId,
             direction: 'outbound',
@@ -138,6 +138,16 @@ const scheduleAutoReply = ({ businessId, customerId, inboundMessageId, suggestio
             status: 'sent',
             timestamp: new Date(),
           });
+
+          if (io) {
+            io.to(String(businessId)).emit('new_message', {
+              customerId,
+              customerName: customer.name,
+              message: caption,
+              timestamp: savedImageMessage.timestamp,
+              messageDoc: savedImageMessage,
+            });
+          }
         }
       }
 
@@ -147,6 +157,7 @@ const scheduleAutoReply = ({ businessId, customerId, inboundMessageId, suggestio
           customerName: customer.name,
           message: savedMessage.content,
           timestamp: savedMessage.timestamp,
+          messageDoc: savedMessage,
         });
       }
 

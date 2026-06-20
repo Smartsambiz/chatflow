@@ -9,6 +9,7 @@ router.post('/login', Login);
 
 //protected routes
 router.get('/me', protect, getCurrentUser);
+router.get('/profile', protect, getCurrentUser);
 router.put('/profile', protect, updateProfile);
 
 module.exports = router;

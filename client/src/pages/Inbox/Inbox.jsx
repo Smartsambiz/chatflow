@@ -29,6 +29,12 @@ function Inbox() {
   const [aiSuggestion, setAiSuggestion] = useState('')
   const [lastInboundId, setLastInboundId] = useState(null)
   const [loadingAi, setLoadingAi] = useState(false)
+  const [liveStatus, setLiveStatus] = useState('Connected')
+  const selectedCustomerRef = useRef(null)
+
+  useEffect(() => {
+    selectedCustomerRef.current = selectedCustomer
+  }, [selectedCustomer])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -49,26 +55,59 @@ function Inbox() {
     const socket = io(SOCKET_URL)
 
     socket.on('connect', () => {
+      setLiveStatus('Connected')
       if (user?._id) {
         socket.emit('joinBusinessRoom', user._id)
       }
     })
 
+    socket.on('disconnect', () => {
+      setLiveStatus('Reconnecting')
+    })
+
     socket.on('new_message', (data) => {
       fetchConversations()
 
-      const currentCustomerId = selectedCustomer?._id ? String(selectedCustomer._id) : null
+      const currentCustomerId = selectedCustomerRef.current?._id ? String(selectedCustomerRef.current._id) : null
       const incomingCustomerId = data?.customerId ? String(data.customerId) : null
 
       if (currentCustomerId && incomingCustomerId && currentCustomerId === incomingCustomerId) {
-        fetchMessages(data.customerId)
+        if (data.messageDoc?._id) {
+          setMessages((prevMessages) => {
+            const alreadyExists = prevMessages.some((message) => message._id === data.messageDoc._id)
+            return alreadyExists ? prevMessages : [...prevMessages, data.messageDoc]
+          })
+
+          if (data.messageDoc.direction === 'inbound') {
+            setLastInboundId(data.messageDoc._id)
+            setAiSuggestion(data.messageDoc.aiSuggestion || '')
+          }
+        } else {
+          fetchMessages(data.customerId, { silent: true })
+        }
+      }
+    })
+
+    socket.on('message_updated', (data) => {
+      const currentCustomerId = selectedCustomerRef.current?._id ? String(selectedCustomerRef.current._id) : null
+      const incomingCustomerId = data?.customerId ? String(data.customerId) : null
+
+      if (currentCustomerId && incomingCustomerId && currentCustomerId === incomingCustomerId && data.messageDoc?._id) {
+        setMessages((prevMessages) =>
+          prevMessages.map((message) => (message._id === data.messageDoc._id ? data.messageDoc : message))
+        )
+
+        if (data.messageDoc.direction === 'inbound') {
+          setLastInboundId(data.messageDoc._id)
+          setAiSuggestion(data.messageDoc.aiSuggestion || '')
+        }
       }
     })
 
     return () => {
       socket.disconnect()
     }
-  }, [selectedCustomer])
+  }, [])
 
   const fetchConversations = async () => {
     try {
@@ -84,9 +123,11 @@ function Inbox() {
     }
   }
 
-  const fetchMessages = async (customerId) => {
+  const fetchMessages = async (customerId, options = {}) => {
     try {
-      setMessagesLoading(true)
+      if (!options.silent) {
+        setMessagesLoading(true)
+      }
       setMessagesError('')
       const response = await api.get(`/conversations/${customerId}`)
       const msgs = response.data?.messages || []
@@ -106,7 +147,9 @@ function Inbox() {
       setMessages([])
       setMessagesError(err.response?.data?.message || 'Could not load this customer conversation.')
     } finally {
-      setMessagesLoading(false)
+      if (!options.silent) {
+        setMessagesLoading(false)
+      }
     }
   }
 
@@ -344,6 +387,9 @@ function Inbox() {
                     : 'bg-emerald-100 text-emerald-700'
                 }`}>
                   {selectedCustomer.status}
+                </span>
+                <span className="hidden rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 sm:inline-flex">
+                  {liveStatus}
                 </span>
               </div>
 
