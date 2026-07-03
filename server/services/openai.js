@@ -1,12 +1,25 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const DEFAULT_MODELS = [
-  'gemini-2.0-flash',
+  'gemini-3.1-flash-lite',
   'gemini-2.0-flash-lite',
-  'gemini-2.0-flash-001',
+  'gemini-2.0-flash',
 ];
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const modelCooldowns = new Map();
+
+const getRetryDelayMs = (error) => {
+  const retryInfo = error?.response?.data?.error?.details?.find?.((detail) => detail['@type'] === 'type.googleapis.com/google.rpc.RetryInfo');
+  const retryDelay = retryInfo?.retryDelay || String(error.message || '').match(/retryDelay":"(\d+)s"/)?.[1];
+
+  if (!retryDelay) return 60 * 1000;
+  if (typeof retryDelay === 'string' && retryDelay.endsWith('s')) {
+    return Math.max(Number.parseFloat(retryDelay) * 1000, 60 * 1000);
+  }
+
+  return Math.max(Number.parseFloat(retryDelay) * 1000, 60 * 1000);
+};
 
 const getGeminiClient = () => {
   const geminiKey = process.env.GEMINI_API_KEY?.trim();
@@ -23,6 +36,14 @@ const getModelCandidates = () => {
     : DEFAULT_MODELS;
 
   return [...new Set(models)];
+};
+
+const getAvailableModelCandidates = () => {
+  const now = Date.now();
+  return getModelCandidates().filter((modelName) => {
+    const cooldownUntil = modelCooldowns.get(modelName) || 0;
+    return cooldownUntil <= now;
+  });
 };
 
 const isRetryableGeminiError = (error) => {
@@ -56,6 +77,13 @@ const isQuotaLimitError = (error) => {
     message.includes('too many requests') ||
     message.includes('check your plan and billing')
   );
+};
+
+const markModelOnCooldown = (modelName, error) => {
+  const retryDelayMs = getRetryDelayMs(error);
+  const cooldownMs = Math.min(Math.max(retryDelayMs, 60 * 1000), 15 * 60 * 1000);
+  modelCooldowns.set(modelName, Date.now() + cooldownMs);
+  console.error(`Gemini model ${modelName} is on cooldown for ${Math.ceil(cooldownMs / 1000)} seconds.`);
 };
 
 const buildFallbackReply = (customerMessage, businessContext) => {
@@ -138,8 +166,13 @@ Suggest a reply for the business owner to send:`;
 
 const generateReply = async (customerMessage, businessContext) => {
   const prompt = buildPrompt(customerMessage, businessContext);
-  const modelCandidates = getModelCandidates();
+  const modelCandidates = getAvailableModelCandidates();
   let client;
+
+  if (modelCandidates.length === 0) {
+    console.error('All Gemini models are temporarily on cooldown. Using local fallback reply.');
+    return buildFallbackReply(customerMessage, businessContext);
+  }
 
   try {
     client = getGeminiClient();
@@ -164,8 +197,8 @@ const generateReply = async (customerMessage, businessContext) => {
         console.error(`Gemini error on ${modelName} attempt ${attempt}:`, errorDetails);
 
         if (isQuotaLimitError(error)) {
-          console.error('Gemini quota is exhausted. Using local fallback reply until billing/quota is fixed.');
-          return buildFallbackReply(customerMessage, businessContext);
+          markModelOnCooldown(modelName, error);
+          break;
         }
 
         if (!isRetryableGeminiError(error)) {
