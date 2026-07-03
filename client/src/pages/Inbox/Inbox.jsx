@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import api from '../../services/api'
+import api, { API_ORIGIN } from '../../services/api'
 import { io } from 'socket.io-client'
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000'
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_ORIGIN
 
 const getMediaUrl = (mediaUrl) => {
   if (!mediaUrl) return ''

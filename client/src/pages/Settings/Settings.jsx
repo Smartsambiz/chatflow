@@ -23,6 +23,7 @@ function Settings() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [whatsappTokenConfigured, setWhatsappTokenConfigured] = useState(false)
 
   useEffect(() => {
     fetchSettings()
@@ -33,6 +34,7 @@ function Settings() {
     try {
       const response = await api.get('/auth/profile')
       const user = response.data.user || {}
+      setWhatsappTokenConfigured(Boolean(user.whatsappAccessTokenConfigured))
       setFormData({
         ...emptyForm,
         businessName: user.businessName || '',
@@ -48,7 +50,7 @@ function Settings() {
         autoReplyEnabled: user.autoReplyEnabled ?? true,
         autoReplyDelaySeconds: user.autoReplyDelaySeconds || 30,
         whatsappPhoneNumberId: user.whatsappPhoneNumberId || '',
-        whatsappAccessToken: user.whatsappAccessToken || '',
+        whatsappAccessToken: '',
       })
     } catch (err) {
       console.error('Failed to fetch settings:', err)
@@ -68,8 +70,13 @@ function Settings() {
         ...formData,
         autoReplyDelaySeconds: Number(formData.autoReplyDelaySeconds) || 30,
       }
+      if (!payload.whatsappAccessToken.trim()) {
+        delete payload.whatsappAccessToken
+      }
       const response = await api.put('/auth/profile', payload)
       localStorage.setItem('user', JSON.stringify(response.data.user))
+      setWhatsappTokenConfigured(Boolean(response.data.user?.whatsappAccessTokenConfigured))
+      setFormData((current) => ({ ...current, whatsappAccessToken: '' }))
       setMessage('Settings saved successfully!')
     } catch (err) {
       console.error('Failed to save settings:', err)
@@ -255,7 +262,17 @@ function Settings() {
                   </div>
                   <div>
                     <label className={labelClass}>Access Token</label>
-                    <textarea name="whatsappAccessToken" value={formData.whatsappAccessToken} onChange={handleChange} placeholder="Enter your WhatsApp Access Token" rows={4} className={`${inputClass} resize-none`} />
+                    <textarea
+                      name="whatsappAccessToken"
+                      value={formData.whatsappAccessToken}
+                      onChange={handleChange}
+                      placeholder={whatsappTokenConfigured ? 'Token saved. Paste a new token only when replacing it.' : 'Enter your WhatsApp Access Token'}
+                      rows={4}
+                      className={`${inputClass} resize-none`}
+                    />
+                    {whatsappTokenConfigured && (
+                      <p className="mt-2 text-xs font-bold text-emerald-700">Access token is saved and hidden for security.</p>
+                    )}
                   </div>
                 </div>
               </section>

@@ -53,6 +53,9 @@ const messageSchema = new mongoose.Schema({
 }, {timestamps: true}
 );
 
+messageSchema.index({ businessId: 1, phone: 1 }, { unique: true });
+messageSchema.index({ businessId: 1, lastMessageAt: -1 });
+
 const Customer = mongoose.model('Customer', messageSchema);
 
 module.exports = Customer;

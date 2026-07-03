@@ -50,7 +50,7 @@ const sendImage = async (req, res) => {
       return res.status(400).json({ message: 'Image is too large. Please upload an image under 5MB.' });
     }
 
-    const customer = await Customer.findById(customerId);
+    const customer = await Customer.findOne({ _id: customerId, businessId: req.user.id });
     if (!customer) {
       return res.status(404).json({ message: 'Customer not found' });
     }
@@ -58,6 +58,9 @@ const sendImage = async (req, res) => {
     cancelAutoReply(req.user.id, customer._id);
 
     const business = await User.findById(req.user.id);
+    if (!business) {
+      return res.status(404).json({ message: 'Business not found' });
+    }
     if (!business.whatsappPhoneNumberId || !business.whatsappAccessToken) {
       return res.status(400).json({
         message: 'WhatsApp not configured. Please add your Phone Number ID and Access Token in settings.',
@@ -99,6 +102,8 @@ const sendImage = async (req, res) => {
       status: 'sent',
       timestamp: new Date(),
     });
+    customer.lastMessageAt = savedMessage.timestamp;
+    await customer.save();
 
     res.json({
       message: 'Image sent successfully',
@@ -137,7 +142,7 @@ const sendMessage = async (req, res) => {
     }
 
     // Get the customer's phone number
-    const customer = await Customer.findById(customerId);
+    const customer = await Customer.findOne({ _id: customerId, businessId: req.user.id });
     console.log('Customer found:', customer ? customer._id : 'null');
     if (!customer) {
       return res.status(404).json({ message: 'Customer not found' });
@@ -147,6 +152,9 @@ const sendMessage = async (req, res) => {
 
     // Get the business WhatsApp credentials
     const business = await User.findById(req.user.id);
+    if (!business) {
+      return res.status(404).json({ message: 'Business not found' });
+    }
     console.log('Business WhatsApp config:', {
       phoneNumberId: business.whatsappPhoneNumberId,
       accessToken: business.whatsappAccessToken ? 'present' : 'missing'
@@ -175,6 +183,8 @@ const sendMessage = async (req, res) => {
       status: 'sent',
       timestamp: new Date(),
     });
+    customer.lastMessageAt = savedMessage.timestamp;
+    await customer.save();
 
     res.json({
       message: 'Message sent successfully',
@@ -215,13 +225,20 @@ const getAiSuggestion = async(req, res)=>{
   try{
     const {messageId } = req.body;
 
-    const message = await Message.findById(messageId);
+    const message = await Message.findOne({
+      _id: messageId,
+      businessId: req.user.id,
+      direction: 'inbound',
+    });
     if(!message){
       return res.status(404).json({message: 'Message not found'});
 
     }
 
     const business = await User.findById(req.user.id);
+    if (!business) {
+      return res.status(404).json({ message: 'Business not found' });
+    }
 
     const suggestion = await generateReply(message.content,{
       businessName: business.businessName,

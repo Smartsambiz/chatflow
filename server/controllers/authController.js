@@ -8,6 +8,30 @@ const generateToken = (userId)=>{
 
 }
 
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
+
+const normalizeProductImageUrls = (productImageUrls) => (
+    Array.isArray(productImageUrls)
+        ? productImageUrls
+        : String(productImageUrls || '').split('\n')
+)
+    .map((url) => String(url).trim())
+    .filter(Boolean)
+    .slice(0, 20);
+
+const makeSlug = (businessName) => (
+    String(businessName || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        || `business-${Date.now()}`
+);
+
+const pruneUndefined = (value) => (
+    Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined))
+);
+
 //Helper functio to check what user data to send back
 const sanitizeUser = (user)=>({
     _id: user._id,
@@ -28,7 +52,7 @@ const sanitizeUser = (user)=>({
     autoReplyEnabled: user.autoReplyEnabled,
     autoReplyDelaySeconds: user.autoReplyDelaySeconds,
     whatsappPhoneNumberId: user.whatsappPhoneNumberId,
-    whatsappAccessToken: user.whatsappAccessToken,
+    whatsappAccessTokenConfigured: Boolean(user.whatsappAccessToken),
 });
 
 //Register a new user
@@ -37,7 +61,7 @@ const register = async (req, res)=>{
         const {
             businessName,
             ownerName,
-            email,
+            email: rawEmail,
             password,
             phone,
             businessCategory,
@@ -50,8 +74,14 @@ const register = async (req, res)=>{
         } = req.body;
 
         //check all fields
+        const email = normalizeEmail(rawEmail);
+
         if(!businessName || !ownerName || !email || !password){
             return res.status(400).json({message: 'Please fill in all required fields'});
+        }
+
+        if(password.length < 8){
+            return res.status(400).json({message: 'Password must be at least 8 characters long'});
         }
 
         // check if email already exists
@@ -65,7 +95,7 @@ const register = async (req, res)=>{
         const passwordHash = await bcrypt.hash(password, salt);
 
         // create a unique slug for the business name
-        let slug = businessName.toLowerCase().replace(/[a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        let slug = makeSlug(businessName);
 
         // make slug unique if it already exists
         const existingSlug = await User.findOne({slug});
@@ -84,9 +114,7 @@ const register = async (req, res)=>{
             businessCategory,
             description,
             productsServices,
-            productImageUrls: Array.isArray(productImageUrls)
-                ? productImageUrls
-                : String(productImageUrls || '').split('\n').map((url) => url.trim()).filter(Boolean),
+            productImageUrls: normalizeProductImageUrls(productImageUrls),
             bankName,
             accountName,
             accountNumber,
@@ -108,7 +136,8 @@ const register = async (req, res)=>{
 //Login an existing user
 const Login = async (req, res)=>{
     try {
-        const {email, password} = req.body;
+        const {email: rawEmail, password} = req.body;
+        const email = normalizeEmail(rawEmail);
         //check all fields
         if(!email || !password){
             return res.status(400).json({message: 'Please fill in all required fields'});
@@ -178,28 +207,36 @@ const updateProfile = async (req, res)=>{
             whatsappPhoneNumberId,
             whatsappAccessToken,
         } = req.body;
-        const normalizedProductImageUrls = Array.isArray(productImageUrls)
-            ? productImageUrls
-            : String(productImageUrls || '').split('\n').map((url) => url.trim()).filter(Boolean);
+        const normalizedProductImageUrls = normalizeProductImageUrls(productImageUrls);
+        if (!businessName || !ownerName) {
+            return res.status(400).json({message: 'Business name and owner name are required'});
+        }
+
+        const delay = Math.min(Math.max(Number(autoReplyDelaySeconds) || 30, 5), 300);
+
+        const update = pruneUndefined({
+            businessName,
+            ownerName,
+            phone,
+            businessCategory,
+            description,
+            productsServices,
+            productImageUrls: normalizedProductImageUrls,
+            bankName,
+            accountName,
+            accountNumber,
+            autoReplyEnabled: typeof autoReplyEnabled === 'boolean' ? autoReplyEnabled : undefined,
+            autoReplyDelaySeconds: delay,
+            whatsappPhoneNumberId,
+        });
+
+        if (typeof whatsappAccessToken === 'string' && whatsappAccessToken.trim()) {
+            update.whatsappAccessToken = whatsappAccessToken.trim();
+        }
 
         const user = await User.findByIdAndUpdate(
             req.user.id,
-            {
-                businessName,
-                ownerName,
-                phone,
-                businessCategory,
-                description,
-                productsServices,
-                productImageUrls: normalizedProductImageUrls,
-                bankName,
-                accountName,
-                accountNumber,
-                autoReplyEnabled,
-                autoReplyDelaySeconds,
-                whatsappPhoneNumberId,
-                whatsappAccessToken,
-            },
+            update,
             {new: true, runValidators: true}
         );
 

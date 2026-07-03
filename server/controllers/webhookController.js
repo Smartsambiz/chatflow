@@ -4,6 +4,45 @@ const Message = require('../models/Message');
 const { generateReply } = require('../services/openai');
 const { scheduleAutoReply } = require('../services/autoReplyScheduler');
 
+const getInboundMessageContent = (messageData) => {
+    if (messageData.type === 'text') {
+        return {
+            type: 'text',
+            content: messageData.text?.body || '',
+            mediaId: '',
+        };
+    }
+
+    if (messageData.type === 'image') {
+        return {
+            type: 'image',
+            content: messageData.image?.caption || '[Image received]',
+            mediaId: messageData.image?.id || '',
+        };
+    }
+
+    if (messageData.type === 'document') {
+        return {
+            type: 'document',
+            content: messageData.document?.filename || '[Document received]',
+            mediaId: messageData.document?.id || '',
+        };
+    }
+
+    if (messageData.type === 'audio') {
+        return {
+            type: 'audio',
+            content: '[Audio received]',
+            mediaId: messageData.audio?.id || '',
+        };
+    }
+
+    return {
+        type: 'text',
+        content: `[Unsupported ${messageData.type || 'message'} received]`,
+        mediaId: '',
+    };
+};
 
 // === verify webhook ===//
 // Meta calls this once when you register the webhook URL.
@@ -41,11 +80,11 @@ const receiveMessage = async (req, res)=>{
         //Extract the important data from the message.
         const phoneNumberId = value.metadata.phone_number_id;
         const customerPhone = messageData.from;
-        const messageText = messageData.text?.body || '';
         const waMessageId = messageData.id;
         const customerName = contactData?.profile?.name || 'Unknown';
+        const inbound = getInboundMessageContent(messageData);
 
-        console.log('Received message:', { customerPhone, messageText });
+        console.log('Received message:', { customerPhone, messageType: inbound.type });
 
         //Find which business owns this whatsapp number.
         const business = await User.findOne({ whatsappPhoneNumberId: phoneNumberId });
@@ -53,6 +92,14 @@ const receiveMessage = async (req, res)=>{
         if(!business){
             console.log('No business found for phone number ID:', phoneNumberId);
             return res.sendStatus(200);
+        }
+
+        if (waMessageId) {
+            const duplicateMessage = await Message.findOne({ waMessageId });
+            if (duplicateMessage) {
+                console.log('Duplicate webhook ignored:', waMessageId);
+                return res.sendStatus(200);
+            }
         }
 
         //find or create the customer in our database.
@@ -80,8 +127,9 @@ const receiveMessage = async (req, res)=>{
             customerId: customer._id,
             waMessageId,
             direction: 'inbound',
-            type: 'text',
-            content: messageText,
+            type: inbound.type,
+            content: inbound.content,
+            mediaId: inbound.mediaId,
             aiSuggestion: '',
             timestamp: new Date(),
         });
@@ -93,12 +141,12 @@ const receiveMessage = async (req, res)=>{
             console.log('Emitting new_message to room:', business._id.toString(), {
               customerId: customer._id,
               customerName: customer.name,
-              message: messageText,
+              message: inbound.content,
             })
             io.to(business._id.toString()).emit('new_message', {
                 customerId: customer._id,
                 customerName: customer.name,
-                message: messageText,
+                message: inbound.content,
                 timestamp: new Date(),
                 messageDoc: savedInboundMessage,
             });
@@ -108,7 +156,7 @@ const receiveMessage = async (req, res)=>{
         res.sendStatus(200);
 
         console.log('Generating AI suggestion...');
-        const aiSuggestion = await generateReply(messageText, {
+        const aiSuggestion = await generateReply(inbound.content, {
             businessName: business.businessName,
             businessCategory: business.businessCategory,
             description: business.description,

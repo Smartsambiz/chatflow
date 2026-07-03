@@ -30,11 +30,13 @@ const userSchema = new mongoose.Schema({
     whatsappPhoneNumberId: {
         type: String,
         default: '',
+        trim: true,
 
     },
     whatsappAccessToken: {
         type: String,
         default: '',
+        trim: true,
     },
     plan: {
         type: String,
@@ -94,6 +96,8 @@ const userSchema = new mongoose.Schema({
         default: true,
     }
 }, {timestamps: true});
+
+userSchema.index({ whatsappPhoneNumberId: 1 }, { sparse: true });
 
 const User = mongoose.model('User', userSchema);
 module.exports = User;
