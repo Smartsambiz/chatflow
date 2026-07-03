@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import api from '../../services/api'
+import api, { API_ORIGIN } from '../../services/api'
 
 const emptyForm = {
   businessName: '',
@@ -24,6 +24,10 @@ function Settings() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [whatsappTokenConfigured, setWhatsappTokenConfigured] = useState(false)
+  const [testingWhatsapp, setTestingWhatsapp] = useState(false)
+  const [whatsappTest, setWhatsappTest] = useState(null)
+
+  const webhookUrl = `${API_ORIGIN}/api/webhook`
 
   useEffect(() => {
     fetchSettings()
@@ -77,6 +81,7 @@ function Settings() {
       localStorage.setItem('user', JSON.stringify(response.data.user))
       setWhatsappTokenConfigured(Boolean(response.data.user?.whatsappAccessTokenConfigured))
       setFormData((current) => ({ ...current, whatsappAccessToken: '' }))
+      setWhatsappTest(null)
       setMessage('Settings saved successfully!')
     } catch (err) {
       console.error('Failed to save settings:', err)
@@ -92,6 +97,42 @@ function Settings() {
       ...formData,
       [name]: type === 'checkbox' ? checked : value,
     })
+  }
+
+  const copyWebhookUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(webhookUrl)
+      setMessage('Webhook URL copied.')
+    } catch (err) {
+      console.error('Failed to copy webhook URL:', err)
+      setMessage('Could not copy automatically. Highlight the webhook URL and copy it manually.')
+    }
+  }
+
+  const testWhatsappConnection = async () => {
+    setTestingWhatsapp(true)
+    setWhatsappTest(null)
+    setMessage('')
+
+    try {
+      const payload = {
+        whatsappPhoneNumberId: formData.whatsappPhoneNumberId,
+      }
+
+      if (formData.whatsappAccessToken.trim()) {
+        payload.whatsappAccessToken = formData.whatsappAccessToken.trim()
+      }
+
+      const response = await api.post('/auth/whatsapp/test-connection', payload)
+      setWhatsappTest(response.data)
+    } catch (err) {
+      setWhatsappTest({
+        connected: false,
+        message: err.response?.data?.message || 'Could not verify WhatsApp. Please try again.',
+      })
+    } finally {
+      setTestingWhatsapp(false)
+    }
   }
 
   const inputClass = 'w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10'
@@ -133,7 +174,7 @@ function Settings() {
             {[
               {
                 title: '1. Connect WhatsApp',
-                body: 'Add your Phone Number ID and Access Token from Meta/Facebook Developers so ChatFlow can receive and send messages.',
+                body: 'Follow the guided connector below. ChatFlow checks the number and token before you start using Inbox.',
               },
               {
                 title: '2. Teach the AI',
@@ -251,14 +292,51 @@ function Settings() {
               </section>
 
               <section className="rounded-3xl border border-emerald-950/10 bg-white p-5 shadow-xl shadow-slate-950/5 sm:p-6">
-                <h2 className="text-lg font-black text-slate-950">WhatsApp configuration</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Add your WhatsApp API credentials so ChatFlow can send replies and receive customer messages.
-                </p>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Guided setup</p>
+                    <h2 className="mt-2 text-lg font-black text-slate-950">Connect WhatsApp</h2>
+                    <p className="mt-2 text-sm leading-6 text-slate-500">
+                      Complete these steps once. ChatFlow will check the connection before customers start messaging you.
+                    </p>
+                  </div>
+                  <span className={`w-fit rounded-full px-3 py-1 text-xs font-black ${
+                    whatsappTokenConfigured ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    {whatsappTokenConfigured ? 'Token saved' : 'Not connected'}
+                  </span>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {[
+                    'Open Meta for Developers and select your WhatsApp app.',
+                    'Copy the Phone Number ID and generate an access token.',
+                    'Paste both below, save settings, then run Test connection.',
+                    'In Meta webhooks, use the callback URL below and subscribe to messages.',
+                  ].map((step, index) => (
+                    <div key={step} className="flex gap-3 rounded-2xl bg-slate-50 p-4">
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-slate-950 text-xs font-black text-white">{index + 1}</span>
+                      <p className="text-sm leading-6 text-slate-700">{step}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-5 rounded-2xl border border-dashed border-emerald-200 bg-emerald-50 p-4">
+                  <label className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-emerald-700">Webhook callback URL</label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input value={webhookUrl} readOnly className="min-w-0 flex-1 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 outline-none" />
+                    <button type="button" onClick={copyWebhookUrl} className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black text-white transition hover:bg-emerald-700">
+                      Copy
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-emerald-900">Use this in Meta webhook setup. The verify token is the value saved in Railway as WHATSAPP_VERIFY_TOKEN.</p>
+                </div>
+
                 <div className="mt-5 space-y-4">
                   <div>
                     <label className={labelClass}>Phone Number ID</label>
-                    <input name="whatsappPhoneNumberId" value={formData.whatsappPhoneNumberId} onChange={handleChange} placeholder="Enter your WhatsApp Phone Number ID" className={inputClass} />
+                    <input name="whatsappPhoneNumberId" value={formData.whatsappPhoneNumberId} onChange={handleChange} placeholder="Example: 123456789012345" className={inputClass} />
+                    <p className="mt-2 text-xs font-medium text-slate-500">This is a long ID from Meta, not your visible WhatsApp phone number.</p>
                   </div>
                   <div>
                     <label className={labelClass}>Access Token</label>
@@ -266,7 +344,7 @@ function Settings() {
                       name="whatsappAccessToken"
                       value={formData.whatsappAccessToken}
                       onChange={handleChange}
-                      placeholder={whatsappTokenConfigured ? 'Token saved. Paste a new token only when replacing it.' : 'Enter your WhatsApp Access Token'}
+                      placeholder={whatsappTokenConfigured ? 'Token saved. Paste a new token only when replacing it.' : 'Paste the access token from Meta'}
                       rows={4}
                       className={`${inputClass} resize-none`}
                     />
@@ -275,6 +353,39 @@ function Settings() {
                     )}
                   </div>
                 </div>
+
+                <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={testWhatsappConnection}
+                    disabled={testingWhatsapp || (!formData.whatsappAccessToken.trim() && !whatsappTokenConfigured)}
+                    className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {testingWhatsapp ? 'Checking...' : 'Test connection'}
+                  </button>
+                  <p className="text-xs leading-5 text-slate-500 sm:max-w-sm">
+                    Save after pasting a new token. Test connection can use a saved token or a new token typed above.
+                  </p>
+                </div>
+
+                {whatsappTest && (
+                  <div className={`mt-5 rounded-2xl border p-4 ${
+                    whatsappTest.connected
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                      : 'border-rose-200 bg-rose-50 text-rose-800'
+                  }`}>
+                    <p className="text-sm font-black">{whatsappTest.connected ? 'Connection verified' : 'Connection needs attention'}</p>
+                    <p className="mt-1 text-sm leading-6">{whatsappTest.message}</p>
+                    {whatsappTest.phoneNumber && (
+                      <div className="mt-3 grid gap-2 text-xs font-bold sm:grid-cols-2">
+                        <p>Number: {whatsappTest.phoneNumber.displayPhoneNumber || 'Available'}</p>
+                        <p>Name: {whatsappTest.phoneNumber.verifiedName || 'Not provided'}</p>
+                        <p>Quality: {whatsappTest.phoneNumber.qualityRating || 'Unknown'}</p>
+                        <p>Platform: {whatsappTest.phoneNumber.platformType || 'Unknown'}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </section>
 
               <button

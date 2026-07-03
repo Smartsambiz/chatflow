@@ -1,5 +1,26 @@
 const axios = require('axios');
 
+const getPhoneNumberInfo = async (phoneNumberId, accessToken) => {
+    try {
+        const response = await axios.get(
+            `https://graph.facebook.com/v25.0/${phoneNumberId}`,
+            {
+                params: {
+                    fields: 'display_phone_number,verified_name,quality_rating,platform_type',
+                },
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            }
+        );
+
+        return response.data;
+    } catch (error) {
+        console.error('Whatsapp phone number lookup error:', error.response ? error.response.data : error.message);
+        throw error;
+    }
+}
+
 const sendTextMessage = async (phoneNumberId, accessToken, to, message)=>{
     try {
 
@@ -123,6 +144,7 @@ const sendImageMediaMessage = async (phoneNumberId, accessToken, to, mediaId, ca
 }
 
 module.exports = {
+    getPhoneNumberInfo,
     sendTextMessage,
     sendImageMessage,
     uploadImageMedia,

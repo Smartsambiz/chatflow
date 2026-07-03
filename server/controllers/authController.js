@@ -1,6 +1,7 @@
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { getPhoneNumberInfo } = require("../services/whatsappService");
 
 //Helper function to create a token from user id
 const generateToken = (userId)=>{
@@ -254,9 +255,68 @@ const updateProfile = async (req, res)=>{
     }
 };
 
+const describeWhatsappError = (error) => {
+    const whatsappError = error.response?.data?.error;
+    const message = String(whatsappError?.message || error.message || '');
+    const code = whatsappError?.code;
+
+    if (code === 190 || message.toLowerCase().includes('token')) {
+        return 'The access token is invalid or expired. Generate a fresh token in Meta and paste it here.';
+    }
+
+    if (code === 100 || message.toLowerCase().includes('unsupported get request')) {
+        return 'The Phone Number ID was not found. Check that you copied the Phone Number ID, not the phone number itself.';
+    }
+
+    if (error.response?.status === 403) {
+        return 'This token does not have permission to access that WhatsApp number.';
+    }
+
+    return 'Could not verify WhatsApp right now. Please check the details and try again.';
+};
+
+const testWhatsappConnection = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const phoneNumberId = String(req.body.whatsappPhoneNumberId || user.whatsappPhoneNumberId || '').trim();
+        const accessToken = String(req.body.whatsappAccessToken || user.whatsappAccessToken || '').trim();
+
+        if (!phoneNumberId || !accessToken) {
+            return res.status(400).json({
+                connected: false,
+                message: 'Add both the Phone Number ID and Access Token before testing.',
+            });
+        }
+
+        const phoneInfo = await getPhoneNumberInfo(phoneNumberId, accessToken);
+
+        res.json({
+            connected: true,
+            message: 'WhatsApp connection verified.',
+            phoneNumber: {
+                id: phoneNumberId,
+                displayPhoneNumber: phoneInfo.display_phone_number,
+                verifiedName: phoneInfo.verified_name,
+                qualityRating: phoneInfo.quality_rating,
+                platformType: phoneInfo.platform_type,
+            },
+        });
+    } catch (error) {
+        res.status(400).json({
+            connected: false,
+            message: describeWhatsappError(error),
+        });
+    }
+};
+
 module.exports = {
     register,
     Login,
     getCurrentUser,
     updateProfile,
+    testWhatsappConnection,
 };
