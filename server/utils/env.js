@@ -5,6 +5,21 @@ const parseList = (value) => (
     .filter(Boolean)
 );
 
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const makePattern = (origin) => new RegExp(`^${origin.split('*').map(escapeRegExp).join('.*')}$`);
+
+const isOriginAllowed = (origin, allowedOrigins) => {
+  if (!origin) return true;
+
+  return allowedOrigins.some((allowedOrigin) => {
+    if (allowedOrigin === origin) return true;
+    if (allowedOrigin.includes('*')) {
+      return makePattern(allowedOrigin).test(origin);
+    }
+    return false;
+  });
+};
+
 const getAllowedOrigins = () => {
   const configuredOrigins = [
     ...parseList(process.env.CLIENT_ORIGIN),
@@ -16,7 +31,7 @@ const getAllowedOrigins = () => {
   }
 
   return [
-    'https://chatflow-sable.vercel.app',
+    'https://*.vercel.app',
     'http://localhost:5173',
     'http://localhost:3000',
   ];
@@ -38,5 +53,6 @@ const validateRequiredEnv = () => {
 
 module.exports = {
   getAllowedOrigins,
+  isOriginAllowed,
   validateRequiredEnv,
 };

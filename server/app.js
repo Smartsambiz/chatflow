@@ -9,7 +9,7 @@ const connectDB = require("./config/db");
 const securityHeaders = require("./middleware/securityHeaders");
 const rateLimiter = require("./middleware/rateLimiter");
 const { notFound, errorHandler } = require("./middleware/errorHandler");
-const { getAllowedOrigins, validateRequiredEnv } = require("./utils/env");
+const { getAllowedOrigins, isOriginAllowed, validateRequiredEnv } = require("./utils/env");
 
 dns.setServers(["8.8.8.8", "8.8.4.4"]);
 
@@ -31,7 +31,7 @@ const server = http.createServer(app);
 const allowedOrigins = getAllowedOrigins();
 const corsOptions = {
     origin(origin, callback) {
-        if (!origin || allowedOrigins.includes(origin)) {
+        if (isOriginAllowed(origin, allowedOrigins)) {
             return callback(null, true);
         }
 
