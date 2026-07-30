@@ -1,13 +1,13 @@
 const Message = require('../models/Message');
 const User = require('../models/User');
 const Customer = require('../models/Customer');
-const { sendTextMessage, sendImageMessage } = require('./whatsappService');
+const { sendTextMessage, sendImageMessage } = require('../../infrastructure/whatsapp/whatsapp.service');
 
 const pendingReplies = new Map();
 
-const getPendingKey = (businessId, customerId) => `${businessId}:${customerId}`;
+const getPendingKey = (businessId: string, customerId: string) => `${businessId}:${customerId}`;
 
-const cancelAutoReply = (businessId, customerId) => {
+const cancelAutoReply = (businessId: string, customerId: string) => {
   const key = getPendingKey(businessId, customerId);
   const pending = pendingReplies.get(key);
 
@@ -18,7 +18,7 @@ const cancelAutoReply = (businessId, customerId) => {
   }
 };
 
-const shouldSendProductImages = (messageContent) => {
+const shouldSendProductImages = (messageContent: unknown) => {
   const message = String(messageContent || '').toLowerCase();
 
   return (
@@ -46,13 +46,13 @@ const shouldSendProductImages = (messageContent) => {
   );
 };
 
-const getPublicProductImageUrls = (business) => (
+const getPublicProductImageUrls = (business: any) => (
   (business.productImageUrls || [])
-    .map((url) => String(url).trim())
+    .map((url: unknown) => String(url).trim())
     .filter(Boolean)
 );
 
-const scheduleAutoReply = ({ businessId, customerId, inboundMessageId, suggestion, delaySeconds = 30, io }) => {
+const scheduleAutoReply = ({ businessId, customerId, inboundMessageId, suggestion, delaySeconds = 30, io }: { businessId: string; customerId: string; inboundMessageId: string; suggestion: string; delaySeconds?: number; io?: any }) => {
   if (!suggestion) return;
 
   const key = getPendingKey(businessId, customerId);
@@ -103,7 +103,7 @@ const scheduleAutoReply = ({ businessId, customerId, inboundMessageId, suggestio
       });
 
       const productImageUrls = getPublicProductImageUrls(business);
-      const validWhatsappImageUrls = productImageUrls.filter((url) => url.startsWith('https://'));
+      const validWhatsappImageUrls = productImageUrls.filter((url: string) => url.startsWith('https://'));
       const wantsProductImages = shouldSendProductImages(inboundMessage.content);
 
       if (wantsProductImages && productImageUrls.length === 0) {
@@ -162,8 +162,9 @@ const scheduleAutoReply = ({ businessId, customerId, inboundMessageId, suggestio
       }
 
       console.log('Delayed auto-reply sent:', key);
-    } catch (error) {
-      console.error('Delayed auto-reply error:', error.response?.data || error.message);
+    } catch (error: unknown) {
+      const autoReplyError = error as any;
+      console.error('Delayed auto-reply error:', autoReplyError.response?.data || autoReplyError.message);
     }
   }, delayMs);
 

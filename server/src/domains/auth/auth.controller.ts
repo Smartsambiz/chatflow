@@ -4,14 +4,14 @@ const jwt = require("jsonwebtoken");
 const { getPhoneNumberInfo } = require("../services/whatsappService");
 
 //Helper function to create a token from user id
-const generateToken = (userId)=>{
+const generateToken = (userId: string)=>{
     return jwt.sign({id: userId}, process.env.JWT_SECRET, {expiresIn: '7d'});
 
 }
 
-const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
+const normalizeEmail = (email: unknown) => String(email || '').trim().toLowerCase();
 
-const normalizeProductImageUrls = (productImageUrls) => (
+const normalizeProductImageUrls = (productImageUrls: unknown) => (
     Array.isArray(productImageUrls)
         ? productImageUrls
         : String(productImageUrls || '').split('\n')
@@ -20,7 +20,7 @@ const normalizeProductImageUrls = (productImageUrls) => (
     .filter(Boolean)
     .slice(0, 20);
 
-const makeSlug = (businessName) => (
+const makeSlug = (businessName: unknown) => (
     String(businessName || '')
         .trim()
         .toLowerCase()
@@ -29,12 +29,12 @@ const makeSlug = (businessName) => (
         || `business-${Date.now()}`
 );
 
-const pruneUndefined = (value) => (
+const pruneUndefined = (value: Record<string, unknown>) => (
     Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined))
 );
 
 //Helper functio to check what user data to send back
-const sanitizeUser = (user)=>({
+const sanitizeUser = (user: any)=>({
     _id: user._id,
     businessName: user.businessName,
     ownerName: user.ownerName,
@@ -57,7 +57,7 @@ const sanitizeUser = (user)=>({
 });
 
 //Register a new user
-const register = async (req, res)=>{
+const register = async (req: any, res: any)=>{
     try {
         const {
             businessName,
@@ -135,7 +135,7 @@ const register = async (req, res)=>{
 };
 
 //Login an existing user
-const Login = async (req, res)=>{
+const Login = async (req: any, res: any)=>{
     try {
         const {email: rawEmail, password} = req.body;
         const email = normalizeEmail(rawEmail);
@@ -171,7 +171,7 @@ const Login = async (req, res)=>{
 };
 
 // Get current user
-const getCurrentUser = async (req, res)=>{
+const getCurrentUser = async (req: any, res: any)=>{
     try {
          
         const user = await User.findById(req.user.id);
@@ -190,7 +190,7 @@ const getCurrentUser = async (req, res)=>{
 
 
 // update profile
-const updateProfile = async (req, res)=>{
+const updateProfile = async (req: any, res: any)=>{
     try {
         const {
             businessName,
@@ -255,7 +255,7 @@ const updateProfile = async (req, res)=>{
     }
 };
 
-const describeWhatsappError = (error) => {
+const describeWhatsappError = (error: any) => {
     const whatsappError = error.response?.data?.error;
     const message = String(whatsappError?.message || error.message || '');
     const code = whatsappError?.code;
@@ -275,7 +275,7 @@ const describeWhatsappError = (error) => {
     return 'Could not verify WhatsApp right now. Please check the details and try again.';
 };
 
-const testWhatsappConnection = async (req, res) => {
+const testWhatsappConnection = async (req: any, res: any) => {
     try {
         const user = await User.findById(req.user.id);
         if (!user) {

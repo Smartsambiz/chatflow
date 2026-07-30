@@ -1,17 +1,17 @@
-const parseList = (value) => (
+const parseList = (value: string | undefined) => (
   String(value || '')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean)
 );
 
-const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const makePattern = (origin) => new RegExp(`^${origin.split('*').map(escapeRegExp).join('.*')}$`);
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const makePattern = (origin: string) => new RegExp(`^${origin.split('*').map(escapeRegExp).join('.*')}$`);
 
-const isOriginAllowed = (origin, allowedOrigins) => {
+const isOriginAllowed = (origin: string | undefined, allowedOrigins: string[]) => {
   if (!origin) return true;
 
-  return allowedOrigins.some((allowedOrigin) => {
+  return allowedOrigins.some((allowedOrigin: string) => {
     if (allowedOrigin === origin) return true;
     if (allowedOrigin.includes('*')) {
       return makePattern(allowedOrigin).test(origin);

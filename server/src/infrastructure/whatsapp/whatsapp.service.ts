@@ -1,6 +1,8 @@
 const axios = require('axios');
 
-const getPhoneNumberInfo = async (phoneNumberId, accessToken) => {
+type WhatsAppError = Error & { response?: { data?: unknown; status?: number } };
+
+const getPhoneNumberInfo = async (phoneNumberId: string, accessToken: string) => {
     try {
         const response = await axios.get(
             `https://graph.facebook.com/v25.0/${phoneNumberId}`,
@@ -15,13 +17,14 @@ const getPhoneNumberInfo = async (phoneNumberId, accessToken) => {
         );
 
         return response.data;
-    } catch (error) {
-        console.error('Whatsapp phone number lookup error:', error.response ? error.response.data : error.message);
+    } catch (error: unknown) {
+        const whatsappError = error as WhatsAppError;
+        console.error('Whatsapp phone number lookup error:', whatsappError.response ? whatsappError.response.data : whatsappError.message);
         throw error;
     }
 }
 
-const sendTextMessage = async (phoneNumberId, accessToken, to, message)=>{
+const sendTextMessage = async (phoneNumberId: string, accessToken: string, to: string, message: string)=>{
     try {
 
         const response = await axios.post(
@@ -47,13 +50,14 @@ const sendTextMessage = async (phoneNumberId, accessToken, to, message)=>{
         return response.data;
         
 
-    } catch (error) {
-        console.error('Whatsapp send error:', error.response ? error.response.data : error.message);
+    } catch (error: unknown) {
+        const whatsappError = error as WhatsAppError;
+        console.error('Whatsapp send error:', whatsappError.response ? whatsappError.response.data : whatsappError.message);
         throw error;
     }
 }
 
-const sendImageMessage = async (phoneNumberId, accessToken, to, imageUrl, caption = '')=>{
+const sendImageMessage = async (phoneNumberId: string, accessToken: string, to: string, imageUrl: string, caption = '')=>{
     try {
         const response = await axios.post(
             `https://graph.facebook.com/v25.0/${phoneNumberId}/messages`,
@@ -76,18 +80,20 @@ const sendImageMessage = async (phoneNumberId, accessToken, to, imageUrl, captio
         );
 
         return response.data;
-    } catch (error) {
-        console.error('Whatsapp image send error:', error.response ? error.response.data : error.message);
+    } catch (error: unknown) {
+        const whatsappError = error as WhatsAppError;
+        console.error('Whatsapp image send error:', whatsappError.response ? whatsappError.response.data : whatsappError.message);
         throw error;
     }
 }
 
-const uploadImageMedia = async (phoneNumberId, accessToken, imageBuffer, mimeType, filename = 'chat-image.jpg') => {
+const uploadImageMedia = async (phoneNumberId: string, accessToken: string, imageBuffer: Buffer, mimeType: string, filename = 'chat-image.jpg') => {
     try {
         const formData = new FormData();
         formData.append('messaging_product', 'whatsapp');
         formData.append('type', mimeType);
-        formData.append('file', new Blob([imageBuffer], { type: mimeType }), filename);
+        const imageBytes = Array.from(imageBuffer.values());
+        formData.append('file', new Blob([new Uint8Array(imageBytes)], { type: mimeType }), filename);
 
         const response = await fetch(
             `https://graph.facebook.com/v25.0/${phoneNumberId}/media`,
@@ -102,19 +108,20 @@ const uploadImageMedia = async (phoneNumberId, accessToken, imageBuffer, mimeTyp
 
         const data = await response.json();
         if (!response.ok) {
-            const error = new Error('WhatsApp media upload failed');
+            const error = new Error('WhatsApp media upload failed') as WhatsAppError;
             error.response = { data, status: response.status };
             throw error;
         }
 
         return data;
-    } catch (error) {
-        console.error('Whatsapp media upload error:', error.response ? error.response.data : error.message);
+    } catch (error: unknown) {
+        const whatsappError = error as WhatsAppError;
+        console.error('Whatsapp media upload error:', whatsappError.response ? whatsappError.response.data : whatsappError.message);
         throw error;
     }
 }
 
-const sendImageMediaMessage = async (phoneNumberId, accessToken, to, mediaId, caption = '') => {
+const sendImageMediaMessage = async (phoneNumberId: string, accessToken: string, to: string, mediaId: string, caption = '') => {
     try {
         const response = await axios.post(
             `https://graph.facebook.com/v25.0/${phoneNumberId}/messages`,
@@ -137,8 +144,9 @@ const sendImageMediaMessage = async (phoneNumberId, accessToken, to, mediaId, ca
         );
 
         return response.data;
-    } catch (error) {
-        console.error('Whatsapp media image send error:', error.response ? error.response.data : error.message);
+    } catch (error: unknown) {
+        const whatsappError = error as WhatsAppError;
+        console.error('Whatsapp media image send error:', whatsappError.response ? whatsappError.response.data : whatsappError.message);
         throw error;
     }
 }

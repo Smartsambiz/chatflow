@@ -15,21 +15,22 @@ const IMAGE_MIME_EXTENSIONS = {
 };
 
 // GET /api/conversations — list all customers for this business
-const getConversations = async (req, res) => {
+const getConversations = async (req: any, res: any) => {
   try {
     const customers = await Customer.find({ businessId: req.user.id })
       .sort({ lastMessageAt: -1 }) // most recent first
       .limit(50);
 
     res.json({ customers });
-  } catch (error) {
-    console.error('getConversations error:', error.message);
+  } catch (error: unknown) {
+    const conversationError = error as Error & { message?: string };
+    console.error('getConversations error:', conversationError.message);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
 // POST /api/conversations/send-image — upload and send an image to a customer
-const sendImage = async (req, res) => {
+const sendImage = async (req: any, res: any) => {
   try {
     const { customerId, imageDataUrl, caption = '' } = req.body;
 
@@ -67,7 +68,7 @@ const sendImage = async (req, res) => {
       });
     }
 
-    const extension = IMAGE_MIME_EXTENSIONS[mimeType];
+    const extension = IMAGE_MIME_EXTENSIONS[mimeType as keyof typeof IMAGE_MIME_EXTENSIONS];
     const filename = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}.${extension}`;
     const uploadDir = path.join(__dirname, '..', 'uploads', 'chat-images');
     const uploadPath = path.join(uploadDir, filename);
@@ -109,14 +110,15 @@ const sendImage = async (req, res) => {
       message: 'Image sent successfully',
       data: savedMessage,
     });
-  } catch (error) {
-    console.error('sendImage error:', error.response?.data || error.message);
+  } catch (error: unknown) {
+    const conversationError = error as any;
+    console.error('sendImage error:', conversationError.response?.data || conversationError.message);
     res.status(500).json({ message: 'Failed to send image. Please try again.' });
   }
 };
 
 // GET /api/conversations/:customerId — get chat history
-const getMessages = async (req, res) => {
+const getMessages = async (req: any, res: any) => {
   try {
     const messages = await Message.find({
       businessId: req.user.id,
@@ -124,14 +126,15 @@ const getMessages = async (req, res) => {
     }).sort({ timestamp: 1 }); // oldest first
 
     res.json({ messages });
-  } catch (error) {
-    console.error('getMessages error:', error.message);
+  } catch (error: unknown) {
+    const conversationError = error as Error & { message?: string };
+    console.error('getMessages error:', conversationError.message);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
 // POST /api/conversations/send — send a message to a customer
-const sendMessage = async (req, res) => {
+const sendMessage = async (req: any, res: any) => {
   try {
     const { customerId, message } = req.body;
     console.log('sendMessage called with:', { customerId, message, userId: req.user.id });
@@ -191,12 +194,13 @@ const sendMessage = async (req, res) => {
       data: savedMessage,
     });
 
-  } catch (error) {
-    console.error('sendMessage error:', error.message);
+  } catch (error: unknown) {
+    const conversationError = error as any;
+    console.error('sendMessage error:', conversationError.message);
 
     // Handle specific WhatsApp API errors
-    if (error.response && error.response.data) {
-      const whatsappError = error.response.data;
+    if (conversationError.response && conversationError.response.data) {
+      const whatsappError = conversationError.response.data;
 
       if (whatsappError.error) {
         if (whatsappError.error.code === 190 || whatsappError.error.message?.includes('expired')) {
@@ -221,7 +225,7 @@ const sendMessage = async (req, res) => {
 };
 
 
-const getAiSuggestion = async(req, res)=>{
+const getAiSuggestion = async(req: any, res: any)=>{
   try{
     const {messageId } = req.body;
 
@@ -260,8 +264,9 @@ const getAiSuggestion = async(req, res)=>{
     await message.save();
 
     res.json({ suggestion });
-  } catch(error){
-    console.log('getAiSuggestion error:', error.message);
+  } catch (error: unknown) {
+    const conversationError = error as Error & { message?: string };
+    console.log('getAiSuggestion error:', conversationError.message);
     res.status(500).json({message: 'Server error'});
   }
 }

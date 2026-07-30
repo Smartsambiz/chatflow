@@ -1,10 +1,10 @@
-const User = require('../models/User');
-const Customer = require('../models/Customer');
-const Message = require('../models/Message');
-const { generateReply } = require('../services/openai');
-const { scheduleAutoReply } = require('../services/autoReplyScheduler');
+const User = require('../../models/User');
+const Customer = require('../../models/Customer');
+const Message = require('../../models/Message');
+const { generateReply } = require('../../domains/services/openai');
+const { scheduleAutoReply } = require('../../jobs/follow-up/autoReplyScheduler');
 
-const getInboundMessageContent = (messageData) => {
+const getInboundMessageContent = (messageData: any) => {
     if (messageData.type === 'text') {
         return {
             type: 'text',
@@ -48,7 +48,7 @@ const getInboundMessageContent = (messageData) => {
 // Meta calls this once when you register the webhook URL.
 // to confirm that you own the URL and to check if the webhook is working.
 
-const verifyWebhook = (req, res)=>{
+const verifyWebhook = (req: any, res: any)=>{
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
@@ -64,7 +64,7 @@ const verifyWebhook = (req, res)=>{
 
 // === handle incoming messages ===//
 // Meta calls this every time a customer sents a message.
-const receiveMessage = async (req, res)=>{
+const receiveMessage = async (req: any, res: any)=>{
     try {
         const body = req.body;
 

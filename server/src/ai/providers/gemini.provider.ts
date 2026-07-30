@@ -6,11 +6,11 @@ const DEFAULT_MODELS = [
   'gemini-2.0-flash',
 ];
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const modelCooldowns = new Map();
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+const modelCooldowns = new Map<string, number>();
 
-const getRetryDelayMs = (error) => {
-  const retryInfo = error?.response?.data?.error?.details?.find?.((detail) => detail['@type'] === 'type.googleapis.com/google.rpc.RetryInfo');
+const getRetryDelayMs = (error: any) => {
+  const retryInfo = error?.response?.data?.error?.details?.find?.((detail: any) => detail['@type'] === 'type.googleapis.com/google.rpc.RetryInfo');
   const retryDelay = retryInfo?.retryDelay || String(error.message || '').match(/retryDelay":"(\d+)s"/)?.[1];
 
   if (!retryDelay) return 60 * 1000;
@@ -46,7 +46,7 @@ const getAvailableModelCandidates = () => {
   });
 };
 
-const isRetryableGeminiError = (error) => {
+const isRetryableGeminiError = (error: any) => {
   const message = String(error.message || '');
   const status = error.status || error.response?.status;
 
@@ -66,7 +66,7 @@ const isRetryableGeminiError = (error) => {
   );
 };
 
-const isQuotaLimitError = (error) => {
+const isQuotaLimitError = (error: any) => {
   const message = String(error.message || '').toLowerCase();
   const status = error.status || error.response?.status;
 
@@ -79,14 +79,14 @@ const isQuotaLimitError = (error) => {
   );
 };
 
-const markModelOnCooldown = (modelName, error) => {
+const markModelOnCooldown = (modelName: string, error: any) => {
   const retryDelayMs = getRetryDelayMs(error);
   const cooldownMs = Math.min(Math.max(retryDelayMs, 60 * 1000), 15 * 60 * 1000);
   modelCooldowns.set(modelName, Date.now() + cooldownMs);
   console.error(`Gemini model ${modelName} is on cooldown for ${Math.ceil(cooldownMs / 1000)} seconds.`);
 };
 
-const buildFallbackReply = (customerMessage, businessContext) => {
+const buildFallbackReply = (customerMessage: string, businessContext: any) => {
   const message = String(customerMessage || '').toLowerCase();
   const productsServices = String(businessContext.productsServices || '').trim();
   const imageUrls = businessContext.productImageUrls || [];
@@ -134,7 +134,7 @@ const buildFallbackReply = (customerMessage, businessContext) => {
   return `Thanks for your message. ${businessContext.businessName || 'We'} will attend to you shortly. Please share what you need so we can help you faster.`;
 };
 
-const buildPrompt = (customerMessage, businessContext) => `You are a helpful customer service assistant for a Nigerian small business.
+const buildPrompt = (customerMessage: string, businessContext: any) => `You are a helpful customer service assistant for a Nigerian small business.
 
 Business name: ${businessContext.businessName}
 Business category: ${businessContext.businessCategory || 'general'}
@@ -164,7 +164,7 @@ Customer message: "${customerMessage}"
 
 Suggest a reply for the business owner to send:`;
 
-const generateReply = async (customerMessage, businessContext) => {
+const generateReply = async (customerMessage: string, businessContext: any) => {
   const prompt = buildPrompt(customerMessage, businessContext);
   const modelCandidates = getAvailableModelCandidates();
   let client;
@@ -176,8 +176,9 @@ const generateReply = async (customerMessage, businessContext) => {
 
   try {
     client = getGeminiClient();
-  } catch (error) {
-    console.error('Gemini setup error:', error.message);
+  } catch (error: unknown) {
+    const geminiError = error as Error & { message?: string };
+    console.error('Gemini setup error:', geminiError.message);
     return buildFallbackReply(customerMessage, businessContext);
   }
 
@@ -192,8 +193,9 @@ const generateReply = async (customerMessage, businessContext) => {
 
         console.log(`AI suggestion generated with ${modelName}:`, suggestion);
         return suggestion;
-      } catch (error) {
-        const errorDetails = error.response?.data || error.message;
+      } catch (error: unknown) {
+        const geminiError = error as any;
+        const errorDetails = geminiError.response?.data || geminiError.message;
         console.error(`Gemini error on ${modelName} attempt ${attempt}:`, errorDetails);
 
         if (isQuotaLimitError(error)) {

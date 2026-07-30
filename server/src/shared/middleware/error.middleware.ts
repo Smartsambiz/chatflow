@@ -1,8 +1,8 @@
-const notFound = (req, res) => {
+const notFound = (req: any, res: any) => {
   res.status(404).json({ message: 'Route not found' });
 };
 
-const errorHandler = (error, req, res, next) => {
+const errorHandler = (error: any, req: any, res: any, next: any) => {
   if (res.headersSent) {
     return next(error);
   }
